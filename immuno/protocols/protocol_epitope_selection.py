@@ -36,7 +36,7 @@ from ..constants import SEL_PARAM_MAP
 
 class ProtIIITDEpitopeSelection(EMProtocol):
   """Run epitope selections on a set of protein sequences (SetOfSequences)"""
-  _label = 'immuno epitope selection'
+  _label = 'IIITD epitope selection'
 
   _selectorOptions = ['ABCpred', 'LBtope']
   _lbModels = ['LBtope_Fixed', 'LBtope_Fixed_non_redundant',

@@ -35,7 +35,7 @@ from ..utils import mapEvalParamNames
 
 class ProtIIITDEvaluations(EMProtocol):
   """Run evaluations on a set of epitopes (SetOfSequenceROIs)"""
-  _label = 'immuno epitope evaluations'
+  _label = 'IIITD epitope evaluations'
 
   _evaluatorOptions = ['ToxinPred', 'AlgPred2', 'IL4pred', 'IL10pred', 'IFNepitope', 'ToxinPred2']
 
