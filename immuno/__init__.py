@@ -37,7 +37,7 @@ from .utils import *
 from .constants import *
 
 # Pluging variables
-_logo = 'iiitd_logo.png'
+_logo = 'immuno_logo.png'
 
 class Plugin(pwchemPlugin):
 	"""
