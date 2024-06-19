@@ -1,0 +1,4 @@
+scipion-pyworkflow
+scipion-em
+scipion-chem
+selenium==4.18
