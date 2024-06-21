@@ -49,6 +49,8 @@ class Plugin(pwchemPlugin):
 		cls._defineVar(IIITD_DIC['browser'], 'Chrome')
 		cls._defineVar(IIITD_DIC['browserPath'], '/usr/bin/google-chrome')
 
+		cls._defineEmVar(VAXIGNML_DIC['home'], VAXIGNML_DIC['name'] + '-' + VAXIGNML_DIC['version'])
+
 	@classmethod
 	def defineBinaries(cls, env, default=True):
 		"""This function defines the binaries for each package."""
@@ -67,12 +69,22 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def addVaxignMLPackage(cls, env, default=True):
 		# Installing Vaxign-ML package
+		# VAXIGN_INSTALLED = '%s_installed' % VAXIGNML_DIC['name']
+		# vaxignML_commands = f'docker images -q e4ong1031/vaxign-ml > {VAXIGN_INSTALLED} && '
+		# vaxignML_commands += f'find ./ -maxdepth 1 -size 0 -name {VAXIGN_INSTALLED} -delete'
+		#
+		# vaxignML_commands = [(vaxignML_commands, VAXIGN_INSTALLED)]
+		# env.addPackage(VAXIGNML_DIC['name'], version=VAXIGNML_DIC['version'],
+		# 							 tar='void.tgz', commands=vaxignML_commands, default=True)
+		
+		
+		correctInstall = 'VAXIGN_INSTALLED'
 		installer = InstallHelper(VAXIGNML_DIC['name'], packageHome=cls.getVar(VAXIGNML_DIC['home']),
 															packageVersion=VAXIGNML_DIC['version'])
-		installer.addCommand('docker pull e4ong1031/vaxign-ml:latest'). \
-			addCommand('wget https://raw.githubusercontent.com/VIOLINet/Vaxign-ML-docker/master/VaxignML.sh'). \
-			addCommand('chmod a+x VaxignML.sh').addCommand("sed -i 's/sudo//g' VaxignML.sh", 'VAXIGN_INSTALLED').\
-			addPackage(env, dependencies=['chmod', 'wget', 'docker'], default=default)
+		# Checks if the docker image exists, fails if not found
+		installer.addCommand('docker images -q e4ong1031/vaxign-ml | { read output; [ -n "$output" ] && '
+												 'echo "$output" || exit 1; }', correctInstall). \
+			addPackage(env, dependencies=['docker'], default=default)
 
 
 	# ---------------------------------- Protocol functions-----------------------
@@ -144,6 +156,23 @@ class Plugin(pwchemPlugin):
 			epiDics[(evalKey, softName)] = res.get()['Score']
 
 		return epiDics
+
+	@classmethod
+	def runVaxignML(cls, protocol, kwargs, cwd=None):
+		""" Run vaxignML command from a given protocol.
+		kwargs must contain:
+		{"i": inputFasta, "o": outputDir, "-t": organism}
+		other optional parameters are:
+		{"s": modelPath, "p": numberProcessors}
+		"""
+		iFile, oDir = kwargs['i'], kwargs['o']
+		program = f"docker run --rm -v {iFile}:{iFile} -v {oDir}:{oDir} -v {oDir}/_FEATURE/PSORTB:/tmp/results " \
+							"e4ong1031/vaxign-ml:latest python3.6 VaxignML.py "
+		args = [f'-{k} {v}' for k,v in kwargs.items()]
+		args = ' '.join(args)
+
+		print('Program: ', program, args)
+		# protocol.runJob(program, args, cwd=cwd)
 
 	# ---------------------------------- Utils functions-----------------------
 	@classmethod
