@@ -45,13 +45,22 @@ If you want the latest changes and developments, user devel branch.
             cd scipion-chem-immuno
             git checkout devel
 
-3. **Define browser**
+3. **Prerequisites**
 
-This plugin uses web browser to access the software servers online.
+- IIITD:
+This package uses web browser to access the software servers online.
 Therefore, you need to specify which browser to use and its location.
 Do so editing the scipion.conf file and add the variables:
     - IIITD_BROWSER = firefox/chrome/chromium  (defines the browser to use, that must already be installed in your computer)
     - IIITD_BROWSER_PATH = <path/to/browser>   (defines the location of the binary for the browser use)
+
+- Vaxign-ML:
+This package runs using a docker image. Since docker images need sudo permission to be downloaded, the user need to
+run the "docker pull" themself to install it. Run:
+
+.. code-block::
+
+            docker pull e4ong1031/vaxign-ml:latest
 
 4. **Install**:
 
