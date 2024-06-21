@@ -55,12 +55,18 @@ Do so editing the scipion.conf file and add the variables:
     - IIITD_BROWSER_PATH = <path/to/browser>   (defines the location of the binary for the browser use)
 
 - Vaxign-ML:
-This package runs using a docker image. Since docker images need sudo permission to be downloaded, the user need to
-run the "docker pull" themself to install it. Run:
+This package runs using a docker image. Since docker images need special permission to be downloaded, the user needs to
+be included in the "docker" bash group of the machine to be able to use it. Managing these groups need sudo permissions.
 
+To create the "docker" group:
 .. code-block::
+            sudo groupadd docker
 
-            docker pull e4ong1031/vaxign-ml:latest
+Then add your user to the group:
+.. code-block::
+            sudo usermod -aG docker $USER
+
+Once your user is in the docker group, the installation can proceed normally.
 
 4. **Install**:
 
