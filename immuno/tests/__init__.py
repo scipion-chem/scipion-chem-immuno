@@ -24,4 +24,4 @@
 # *
 # **************************************************************************
 
-from immuno.tests.test_iiitd_selection import *
+from immuno.tests import *

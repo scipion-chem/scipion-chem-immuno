@@ -26,4 +26,5 @@
 
 from .protocol_add_epitope_evaluations import ProtIIITDEvaluations
 from .protocol_epitope_selection import ProtIIITDEpitopeSelection
+from .protocol_vaxignML_prediction import ProtVaxignMLEpitopeEvaluation
 
