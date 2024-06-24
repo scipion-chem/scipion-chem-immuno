@@ -27,7 +27,7 @@
 This package contains protocols for creating and using IIITD Raghava software
 """
 
-import multiprocessing
+import multiprocessing, shutil
 
 from scipion.install.funcs import InstallHelper
 
@@ -82,8 +82,7 @@ class Plugin(pwchemPlugin):
 		installer = InstallHelper(VAXIGNML_DIC['name'], packageHome=cls.getVar(VAXIGNML_DIC['home']),
 															packageVersion=VAXIGNML_DIC['version'])
 		# Checks if the docker image exists, fails if not found
-		installer.addCommand('docker images -q e4ong1031/vaxign-ml | { read output; [ -n "$output" ] && '
-												 'echo "$output" || exit 1; }', correctInstall). \
+		installer.addCommand('docker pull e4ong1031/vaxign-ml:latest', correctInstall). \
 			addPackage(env, dependencies=['docker'], default=default)
 
 
@@ -165,14 +164,28 @@ class Plugin(pwchemPlugin):
 		other optional parameters are:
 		{"s": modelPath, "p": numberProcessors}
 		"""
+		protId = protocol.getObjId()
+		tmpDir = f'/tmp/VaxignML_{protId}'
 		iFile, oDir = kwargs['i'], kwargs['o']
-		program = f"docker run --rm -v {iFile}:{iFile} -v {oDir}:{oDir} -v {oDir}/_FEATURE/PSORTB:/tmp/results " \
+		kwargs['o'] = tmpDir
+
+		program = f"docker run --rm -v {iFile}:{iFile} -v {tmpDir}:{tmpDir} " \
+							f"-v {tmpDir}/_FEATURE/PSORTB:/tmp/results " \
 							"e4ong1031/vaxign-ml:latest python3.6 VaxignML.py "
 		args = [f'-{k} {v}' for k,v in kwargs.items()]
 		args = ' '.join(args)
 
-		print('Program: ', program, args)
-		# protocol.runJob(program, args, cwd=cwd)
+		protocol.runJob(program, args, cwd=cwd)
+
+		# Copying results dir with no-root user
+		shutil.copytree(tmpDir, oDir)
+
+		# Remove root results dir
+		program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf"
+		args = f'/mnt/{tmpDir}'
+
+		protocol.runJob(program, args, cwd=cwd)
+
 
 	# ---------------------------------- Utils functions-----------------------
 	@classmethod
