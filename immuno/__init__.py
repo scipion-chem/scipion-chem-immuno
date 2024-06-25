@@ -181,10 +181,10 @@ class Plugin(pwchemPlugin):
 		shutil.copytree(tmpDir, oDir)
 
 		# Remove root results dir
-		program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf"
-		args = f'/mnt/{tmpDir}'
-
-		protocol.runJob(program, args, cwd=cwd)
+		if os.path.exists(tmpDir):
+			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf"
+			args = f'/mnt/{tmpDir}'
+			protocol.runJob(program, args, cwd=cwd)
 
 
 	# ---------------------------------- Utils functions-----------------------

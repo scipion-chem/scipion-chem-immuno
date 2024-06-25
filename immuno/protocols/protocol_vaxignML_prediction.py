@@ -31,8 +31,38 @@ from pwem.objects import SetOfSequences
 from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfSequenceROIs
+from pwchem.utils import checkNormalResidues
 
 from immuno import Plugin as immunoPlugin
+
+
+def filterSequences(inSeqs):
+  '''Filters the sequences so VaxignML is able to use them
+  inSeqs: {seqId: sequence}
+  '''
+  fSeqs = {}
+  for seqId, seq in inSeqs.items():
+    if len(seq) >= 50 and checkNormalResidues(seq):
+      fSeqs[seqId] = seq
+  return fSeqs
+
+def writeFasta(inSeqs, outFile):
+  inFasta = os.path.abspath(outFile)
+  with open(inFasta, 'w') as f:
+    for name, seq in inSeqs.items():
+      f.write(f'>{name}\n{seq}\n')
+
+  return inFasta
+
+def parseResults(resFile):
+  '''Return {seqId: protegenicity}'''
+  resDic = {}
+  with open(resFile) as f:
+    f.readline()
+    for line in f:
+      sline = line.strip().split()
+      resDic[sline[0]] = sline[-1]
+  return resDic
 
 class ProtVaxignMLEpitopeEvaluation(EMProtocol):
   """Run epitope evaluation on a set of epitopes (SetOfSequenceROIs)"""
@@ -44,6 +74,18 @@ class ProtVaxignMLEpitopeEvaluation(EMProtocol):
 
   def __init__(self, **kwargs):
     EMProtocol.__init__(self, **kwargs)
+
+  def _defineEvalParams(self, aGroup, allCond=True):
+    '''Define the evaluation options and the parameters for each of them.
+        allCond: condition to apply for all the parameters
+
+        WARNING: This function is used by a scipion-chem metaprotocol to use and define this parameters by its own,
+        modify with care
+        '''
+    aGroup.addParam('organ', params.EnumParam, choices=self._organOptions,
+                    label='Choose epitope source: ', default=0, condition=allCond,
+                    help='Organism type for the pathogenic epitopes.')
+    return aGroup
 
   def _defineParams(self, form):
     form.addSection(label='Input')
@@ -60,9 +102,7 @@ class ProtVaxignMLEpitopeEvaluation(EMProtocol):
                     help="Set of sequence ROIs to label with the present MHC-II alleles")
 
     aGroup = form.addGroup('Parameters')
-    aGroup.addParam('organ', params.EnumParam, choices=self._organOptions,
-                    label='Choose epitope source: ', default=0,
-                    help='Organism type for the pathogenic epitopes.')
+    aGroup = self._defineEvalParams(aGroup)
 
     form.addParallelSection(threads=4, mpi=1)
 
@@ -71,8 +111,10 @@ class ProtVaxignMLEpitopeEvaluation(EMProtocol):
     self._insertFunctionStep(self.defineOutputStep)
 
   def evaluationStep(self):
-    if self.countViableSequences() > 0:
-      inFasta = self.generateFasta()
+    inSeqs = self.getInputSequences()
+    inSeqs = filterSequences(inSeqs)
+    inFasta = writeFasta(inSeqs, self._getExtraPath('inputSequences.fa'))
+    if len(inSeqs) > 0:
       org = self.getEnumText('organ').lower()
       kwargs = {'i': inFasta, 'o': self.getOutDir(), 't': org, 'p': self.numberOfThreads.get()}
 
@@ -83,13 +125,16 @@ class ProtVaxignMLEpitopeEvaluation(EMProtocol):
   def defineOutputStep(self):
       outFile = self.getOutDir('inputSequences.result.tsv')
       if os.path.exists(outFile):
-        resDic = self.parseResults(outFile)
+        resDic = parseResults(outFile)
 
         if self.inputSource.get() == 0:
           outSeqs = SetOfSequences().create(outputPath=self._getPath())
           for seq in self.inputSequences.get():
             seqId = seq.getId()
-            seq._vaxignML = params.Float(float(resDic[seqId][1]))
+            if seqId in resDic:
+              seq._vaxignML = params.Float(float(resDic[seqId]))
+            else:
+              seq._vaxignML = params.Float(0.0)
             outSeqs.append(seq)
 
           self._defineOutputs(outputSequences=outSeqs)
@@ -99,7 +144,10 @@ class ProtVaxignMLEpitopeEvaluation(EMProtocol):
           outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
           for roi in inROIs:
             roiId = roi.getROIId()
-            roi._vaxignML = params.Float(float(resDic[roiId][1]))
+            if roiId in resDic:
+              roi._vaxignML = params.Float(float(resDic[roiId]))
+            else:
+              roi._vaxignML = params.Float(0.0)
             outROIs.append(roi)
 
           self._defineOutputs(outputROIs=outROIs)
@@ -115,37 +163,20 @@ class ProtVaxignMLEpitopeEvaluation(EMProtocol):
   def getInputNameFunc(self):
     return 'getSeqName' if self.inputSource.get() == 0 else 'getROIId'
   
-  def countViableSequences(self):
-    count = 0
+  def getOutDir(self, path=''):
+    return os.path.join(os.path.abspath(self._getExtraPath('vaxResults')), path)
+
+  def getInputSequences(self):
+    '''Returns the input sequences as a dict like {seqId: sequence}
+    '''
+    inSeqs = {}
     inSet = self.getInputSet()
     seqFunc, nameFunc = self.getInputSeqFunc(), self.getInputNameFunc()
     for item in inSet:
       seq, name = getattr(item, seqFunc)(), getattr(item, nameFunc)()
-      if len(seq) >= 50:
-        count += 1
-    return count
-  
-  def getOutDir(self, path=''):
-    return os.path.join(os.path.abspath(self._getExtraPath('vaxResults')), path)
+      inSeqs[name] = seq
+    return inSeqs
 
-  def generateFasta(self):
-    inFasta = os.path.abspath(self._getExtraPath('inputSequences.fa'))
-    if self.inputSource.get() == 0:
-      self.inputSequences.get().exportToFile(inFasta)
-    else:
-      self.inputROIs.get().exportToFile(inFasta, mainSeq=False)
-    return inFasta
-  
-  def parseResults(self, resFile):
-    resDic = {}
-    with open(resFile) as f:
-      f.readline()
-      for line in f:
-        sline = line.strip().split()
-        resDic[sline[0]] = sline[-2:]
-    return resDic
-  
-  
   def _warnings(self):
     warns = []
     inSet = self.getInputSet()
