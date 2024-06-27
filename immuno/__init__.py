@@ -27,7 +27,7 @@
 This package contains protocols for creating and using IIITD Raghava software
 """
 
-import multiprocessing, shutil
+import multiprocessing, shutil, subprocess
 
 from scipion.install.funcs import InstallHelper
 
@@ -175,16 +175,17 @@ class Plugin(pwchemPlugin):
 		args = [f'-{k} {v}' for k,v in kwargs.items()]
 		args = ' '.join(args)
 
-		protocol.runJob(program, args, cwd=cwd)
+		subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
 
 		# Copying results dir with no-root user
 		shutil.copytree(tmpDir, oDir)
 
 		# Remove root results dir
 		if os.path.exists(tmpDir):
-			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf"
+			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
 			args = f'/mnt/{tmpDir}'
-			protocol.runJob(program, args, cwd=cwd)
+			subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
+			# protocol.runJob(program, args, cwd=cwd)
 
 
 	# ---------------------------------- Utils functions-----------------------
