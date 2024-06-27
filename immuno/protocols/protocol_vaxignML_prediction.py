@@ -54,14 +54,15 @@ def writeFasta(inSeqs, outFile):
 
   return inFasta
 
-def parseResults(resFile):
+def parseResults(resFile, norm=True):
   '''Return {seqId: protegenicity}'''
   resDic = {}
   with open(resFile) as f:
     f.readline()
     for line in f:
       sline = line.strip().split()
-      resDic[sline[0]] = sline[-1]
+      normVal = 100 if norm else 1
+      resDic[sline[0]] = float(sline[-1]) / normVal
   return resDic
 
 class ProtVaxignMLEpitopeEvaluation(EMProtocol):
