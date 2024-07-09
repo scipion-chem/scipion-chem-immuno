@@ -30,7 +30,7 @@ from pwem.protocols import ProtImportSequence
 
 from pwchem.utils import assertHandle
 
-from ..protocols import ProtIIITDEpitopeSelection
+from ..protocols import ProtIIITDEpitopePrediction
 from ..constants import SELSUM
 
 class TestIIITDSelection(BaseTest):
@@ -59,7 +59,7 @@ class TestIIITDSelection(BaseTest):
 		cls.proj.launchProtocol(cls.protImportSeq, wait=False)
 
 	def _runIIITDSelection(self):
-		protSel = self.newProtocol(ProtIIITDEpitopeSelection,
+		protSel = self.newProtocol(ProtIIITDEpitopePrediction,
 																		inSels=SELSUM)
 
 		protSel.inputSequence.set(self.protImportSeq)

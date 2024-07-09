@@ -34,7 +34,7 @@ from pwchem.objects import Sequence, SequenceROI, SetOfSequenceROIs
 from immuno import Plugin as iiitdPlugin
 from ..constants import SEL_PARAM_MAP
 
-class ProtIIITDEpitopeSelection(EMProtocol):
+class ProtIIITDEpitopePrediction(EMProtocol):
   """Run epitope selections on a set of protein sequences (SetOfSequences)"""
   _label = 'IIITD epitope selection'
 
