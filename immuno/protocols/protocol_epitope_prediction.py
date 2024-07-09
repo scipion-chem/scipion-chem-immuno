@@ -35,8 +35,8 @@ from immuno import Plugin as iiitdPlugin
 from ..constants import SEL_PARAM_MAP
 
 class ProtIIITDEpitopePrediction(EMProtocol):
-  """Run epitope selections on a set of protein sequences (SetOfSequences)"""
-  _label = 'IIITD epitope selection'
+  """Run epitope prediction on a set of protein sequences (SetOfSequences)"""
+  _label = 'IIITD epitope prediction'
 
   _selectorOptions = ['ABCpred', 'LBtope']
   _lbModels = ['LBtope_Fixed', 'LBtope_Fixed_non_redundant',
