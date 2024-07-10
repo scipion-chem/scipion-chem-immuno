@@ -119,7 +119,7 @@ class ProtIIITDEpitopePrediction(EMProtocol):
           seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
           seqROI._epitopeType = params.String('B')
           seqROI._source = params.String(softName)
-          setattr(seqROI, softName, params.Float(epSc))
+          setattr(seqROI, '_sourceScore', params.Float(epSc))
           outROIs.append(seqROI)
 
     if len(outROIs) > 0:
