@@ -39,6 +39,15 @@ from .constants import *
 # Pluging variables
 _logo = 'immuno_logo.png'
 
+def filterSequences(seqDic, softName):
+	fSeqs = seqDic.copy()
+	if softName in SEQ_LIMITS:
+		for seqId, seq in seqDic.items():
+			if len(seq) > SEQ_LIMITS[softName]:
+				del fSeqs[seqId]
+	return fSeqs
+
+
 class Plugin(pwchemPlugin):
 	"""
 	"""
@@ -127,22 +136,24 @@ class Plugin(pwchemPlugin):
     Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
     '''
 		funcDic = {
-			'ToxinPred': callToxinPred, 'AlgPred2': callAlgPred2, 'ToxinPred2': callToxinPred2,
-			'IL4pred': callIL4pred, 'IL10pred': callIL10pred, 'IFNepitope': callIFNepitope,
+			TOXINPRED: callToxinPred, ALGPRED2: callAlgPred2, TOXINPRED2: callToxinPred2,
+			IL4PRED: callIL4pred, IL10PRED: callIL10pred, IFNEPITOPE: callIFNepitope,
 		}
 
 		# Create a pool of worker processes
 		nJobs = len(evalDics) if len(evalDics) < jobs else jobs
 		pool = multiprocessing.Pool(processes=nJobs)
 
-		resultsDic = {}
+		resultsDic, fKeys = {}, {}
 		for evalKey, evalDic in evalDics.items():
 			softName = evalDic['software']
+			fSeqs = filterSequences(sequences, softName)
+			fKeys[(evalKey, softName)] = list(fSeqs.keys())
 			smallEvalDic = evalDic.copy()
 			del smallEvalDic['software']
 			if softName in funcDic:
 				resultsDic[(evalKey, softName)] = pool.apply_async(funcDic[softName],
-																													 args=(sequences, smallEvalDic, browserData))
+																													 args=(fSeqs, smallEvalDic, browserData))
 
 		if verbose:
 			reportPoolStatus(resultsDic)
@@ -152,8 +163,16 @@ class Plugin(pwchemPlugin):
 
 		epiDics = {}
 		for (evalKey, softName), res in resultsDic.items():
-			epiDics[(evalKey, softName)] = res.get()['Score']
+			fScores = res.get()['Score'] if 'Score' in res.get() else []
+			allScores, i = [], 0
+			for seqId in sequences:
+				if seqId in fKeys[(evalKey, softName)]:
+					allScores.append(fScores[i])
+					i += 1
+				else:
+					allScores.append(0)
 
+			epiDics[(evalKey, softName)] = allScores
 		return epiDics
 
 	@classmethod

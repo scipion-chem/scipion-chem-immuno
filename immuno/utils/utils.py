@@ -27,7 +27,7 @@
 import time, os, requests
 from Bio import SeqIO
 
-from ..constants import EVAL_PARAM_MAP
+from ..constants import *
 
 def runEpitopeSelection(softwareName, argsDic, browserData={}):
   ''' Run an epitope selector program with the specified arguments and parse the results
@@ -234,6 +234,18 @@ def innerSplit(text, preText, endText):
     results.append(text.strip().split(endText)[0].strip())
   return results
 
+def filterSequences(inSeqDic, minLen=0, maxLen=100000):
+  '''Filter an input sequences dic with min/max lengths.
+  nullDic collects the items in order and already fills the null values for those sequences filtered
+  Returns the dictionaries with the sequences that pass and do not pass the filter
+  '''
+  passDic = {}
+  for seqId, seq in inSeqDic.items():
+    if len(seq) >= minLen and len(seq) <= maxLen:
+      passDic[seqId] = seq
+
+  return passDic
+
 ########## REQUESTS ##########
 
 def makeRequest(url, action='post', data={}, headers={}):
@@ -293,6 +305,7 @@ def callToxinPred(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'seq', 'params': data, 'submitCSS': "input[value='Run Analysis!']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[TOXINPRED])
   outDic = seleniumRequest(sequences, softData, browserData, parseToxinPred)
   return outDic
 
@@ -316,6 +329,7 @@ def callIFNepitope(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'sequence', 'params': data, 'submitCSS': "input[value='Submit Peptides for Prediction']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[IFNEPITOPE])
   outDic = seleniumRequest(sequences, softData, browserData, parseIFNepitope)
   return outDic
 
@@ -327,6 +341,7 @@ def callIL4pred(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'seq', 'params': data, 'submitCSS': "input[value='Virtual Screening']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[IL4PRED])
   outDic = seleniumRequest(sequences, softData, browserData, parseToxinPred)
   return outDic
 
@@ -486,7 +501,7 @@ def parseToxinPred(driver):
     for row in tbody.find_elements(By.TAG_NAME, 'tr'):
       for i, cell in enumerate(row.find_elements(By.TAG_NAME, 'td')):
         resDic[labels[i]].append(cell.text)
-    return outDic
+    return resDic
 
   data = driver.find_elements(By.ID, "tableTwo")
   while not data:

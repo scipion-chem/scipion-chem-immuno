@@ -30,14 +30,14 @@ from pyworkflow.protocol import params
 from pwchem.objects import SetOfSequenceROIs
 
 from .. import Plugin as iiitdPlugin
-from ..constants import TOXIN2WARN
+from ..constants import *
 from ..utils import mapEvalParamNames
 
 class ProtIIITDEvaluations(EMProtocol):
   """Run evaluations on a set of epitopes (SetOfSequenceROIs)"""
   _label = 'IIITD epitope evaluations'
 
-  _evaluatorOptions = ['ToxinPred', 'AlgPred2', 'IL4pred', 'IL10pred', 'IFNepitope', 'ToxinPred2']
+  _evaluatorOptions = [TOXINPRED, ALGPRED2, IL4PRED, IL10PRED, IFNEPITOPE, TOXINPRED2]
 
   _toxinSVMMethods = ["SVM(Swiss-Prot)", "SVM(Swiss-Prot)+Motif", "SVM(TrEMBL)", "SVM(TrEMBL)+Motif"]
   _toxinQMMethods = ["Monopeptide(Swiss-Prot)", "Monopeptide(TrEMBL)", "Dipeptide(Swiss-Prot)", "Dipeptide(TrEMBL)"]
@@ -49,12 +49,12 @@ class ProtIIITDEvaluations(EMProtocol):
   _toxin2Methods = ["AAC based RF", "Hybrid (RF+BLAST+MERCI)"]
 
 
-  _softParams = {'ToxinPred': ['toxinMethod', 'toxinSVMMethod', 'toxinQMMethod', 'toxinEval', 'toxinThval'],
-                 'AlgPred2': ['algMethod', 'algThres'],
-                 'IL4pred': ['il4Method', 'il4Thval'],
-                 'IL10pred': ['il10Method', 'il10Thval'],
-                 'IFNepitope': ['ifnMethod'],
-                 'ToxinPred2': ['toxin2Method', 'toxin2Eval']
+  _softParams = {TOXINPRED: ['toxinMethod', 'toxinSVMMethod', 'toxinQMMethod', 'toxinEval', 'toxinThval'],
+                 ALGPRED2: ['algMethod', 'algThres'],
+                 IL4PRED: ['il4Method', 'il4Thval'],
+                 IL10PRED: ['il10Method', 'il10Thval'],
+                 IFNEPITOPE: ['ifnMethod'],
+                 TOXINPRED2: ['toxin2Method', 'toxin2Eval']
                  }
 
   def __init__(self, **kwargs):
@@ -220,6 +220,23 @@ class ProtIIITDEvaluations(EMProtocol):
     if len(self.getWebEvaluatorDics()) < 1:
       vs.append('You need to add at least one evaluator to run the protocol')
     return vs
+
+  def _warnings(self):
+    ws, maxLen = [], 0
+    for roi in self.inputROIs.get():
+      curLen = len(roi.getROISequence())
+      if curLen > maxLen:
+        maxLen = curLen
+
+    softs = [inDic['software'] for inDic in self.getWebEvaluatorDics().values()]
+
+    for soft in softs:
+      if soft in SEQ_LIMITS:
+        if maxLen > SEQ_LIMITS[soft]:
+          ws.append(f'At least one of the input ROIs is longer than {SEQ_LIMITS[soft]} residues. '
+                    f'{soft} cannot be run on these sequences, so their scores will be zero')
+
+    return ws
 
   def _summary(self):
     sm = []
