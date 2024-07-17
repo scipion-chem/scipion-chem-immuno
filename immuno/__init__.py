@@ -32,6 +32,7 @@ import multiprocessing, shutil, subprocess
 from scipion.install.funcs import InstallHelper
 
 from pwchem import Plugin as pwchemPlugin
+from pwchem.utils import insistentRun
 
 from .utils import *
 from .constants import *
@@ -203,8 +204,8 @@ class Plugin(pwchemPlugin):
 		if os.path.exists(tmpDir):
 			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
 			args = f'/mnt/{tmpDir}'
-			subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
-			# protocol.runJob(program, args, cwd=cwd)
+			insistentRun(protocol, program, args, cwd=cwd)
+			# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
 
 
 	# ---------------------------------- Utils functions-----------------------
