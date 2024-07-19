@@ -116,6 +116,14 @@ def setData(driver, paramDic):
   for dk, dv in paramDic.items():
     dataElements = driver.find_elements(By.NAME, dk)
     for dEl in dataElements:
+      try:
+        # Writtable parameters
+        dEl.clear()
+        dEl.send_keys(dv)
+      except:
+        # Chosing parameters
+        dEl.send_keys(dv)
+      # Clicking parameters
       if dEl.get_attribute('value') == dv:
         dEl.click()
   return driver
@@ -402,16 +410,14 @@ def parseABCpredOutHTML(response):
   return outDic
 
 
-def filterBestEpitopes(resDic, minProb=78):
-  # todo: use input minprob
+def prepareOutputDic(resDic):
   epDic = {}
   for protId in resDic:
     epDic[protId] = {}
     for i, ep in enumerate(resDic[protId]):
-      prob = resDic[protId][ep]['Probability']
-      if prob >= minProb:
-        epDic[protId] = updateBatchDic(epDic[protId],
-                                       {'Sequence': [ep], 'Position': [i + 1], 'Score': [resDic[protId][ep]['Score']]})
+      epDic[protId] = updateBatchDic(epDic[protId],
+                                     {'Sequence': [ep], 'Position': [i + 1], 'Score': [resDic[protId][ep]['Score']],
+                                     'Probability': [resDic[protId][ep]['Probability']]})
   return epDic
 
 
@@ -463,7 +469,7 @@ def parseLBtope(driver):
     else:
       protId = sline[2].replace('>', '')
       resDic[protId] = {}
-  epDic = filterBestEpitopes(resDic)
+  epDic = prepareOutputDic(resDic)
   return epDic
 
 def parseToxinPred11(driver):
