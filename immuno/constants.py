@@ -43,7 +43,10 @@ bepiPattern = 'immuno'
 READ_URL = 'https://github.com/scipion-chem/scipion-chem-IIITD'
 
 
-SEL_PARAM_MAP = {'abcWindow': 'window', 'abcThres': 'Threshold', 'abcFilter': 'filter'}
+SEL_PARAM_MAP = {'abcWindow': 'window', 'abcThres': 'Threshold', 'abcFilter': 'filter',
+                 'lbModel': "for", 'lbLength': 'expect', 'lbThres': 'val'}
+SEL_PARAM_VALUE_MAP = {'LBtope_Fixed': 'fix', 'LBtope_Fixed_non_redundant': 'fixnr',
+                       'LBtope_Variable': 'flx', 'LBtope_Variable_non_redundant': "flxnr", 'LBtop_Confirm': 'flx2'}
 
 EVAL_PARAM_MAP = {
   TOXINPRED: {'method': {'SVM (Swiss-Prot)': 1, 'SVM (Swiss-Prot) + Motif': 2, 'SVM (TrEMBL)': 3, 'SVM (TrEMBL) + Motif': 4,
@@ -69,9 +72,9 @@ SELSUM = '''1) "ABCpred-1": {'software': 'ABCpred', 'abcWindow': '16', 'abcThres
 2) "LBtope-1": {'software': 'LBtope', 'lbModel': 'LBtope_Variable', 'lbThres': '60', 'lbLength': 15}
 '''
 
-EVALSUM = f'''1) "ToxinPred-1": {{'software': {TOXINPRED}, 'toxinMethod': 'SVM', 'toxinSVMMethod': 'SVM(Swiss-Prot)', 'toxinQMMethod': 'Monopeptide(Swiss-Prot)', 'toxinEval': 10.0, 'toxinThval': 0.0}}
-2) "AlgPred2-1": {{'software': {ALGPRED2}, 'algMethod': 'AAC based RF', 'algThres': 0.3}}
-3) "IL4pred-1": {{'software': {IL4PRED}, 'il4Method': 'Hybrid', 'il4Thval': 0.2}}
-4) "IL10pred-1": {{'software': {IL10PRED}, 'il10Method': 'SVM', 'il10Thval': -0.3}}
-5) "IFNepitope-1": {{'software': {IFNEPITOPE}, 'ifnMethod': 'Hybrid'}}
+EVALSUM = f'''1) "ToxinPred-1": {{'software': '{TOXINPRED}', 'toxinMethod': 'SVM', 'toxinSVMMethod': 'SVM(Swiss-Prot)', 'toxinQMMethod': 'Monopeptide(Swiss-Prot)', 'toxinEval': 10.0, 'toxinThval': 0.0}}
+2) "AlgPred2-1": {{'software': '{ALGPRED2}', 'algMethod': 'AAC based RF', 'algThres': 0.3}}
+3) "IL4pred-1": {{'software': '{IL4PRED}', 'il4Method': 'Hybrid', 'il4Thval': 0.2}}
+4) "IL10pred-1": {{'software': '{IL10PRED}', 'il10Method': 'SVM', 'il10Thval': -0.3}}
+5) "IFNepitope-1": {{'software': '{IFNEPITOPE}', 'ifnMethod': 'Hybrid'}}
 '''
