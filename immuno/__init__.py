@@ -76,7 +76,6 @@ class Plugin(pwchemPlugin):
 															packageVersion=IIITD_DIC['version'])
 		# Installing IIITD package
 		installer.getCondaEnvCommand(pythonVersion='3.7', requirementsFile=False) \
-			.addCondaPackages(['selenium'], channel='conda-forge') \
 			.addCommand(f'{cls.getEnvActivationCommand(IIITD_DIC)} && pip install {" ".join(IIITD_PACKAGES)}', 'PIP_MODS_INSTALLED') \
 			.addPackage(env, ['conda', 'pip'], default=default)
 
