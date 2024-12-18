@@ -138,7 +138,7 @@ def getDriver(browserData):
     - name: str, the name of the browser to use (either "Chrome" for Google-Chrome or Firefox)
     - path: str, path for the browser executable in case of non default
   '''
-  if not 'name' in browserData or browserData['name'] != 'Firefox':
+  if not 'name' in browserData or browserData['name'].lower() != 'firefox':
     options = ChromeOptions()
     driverObj = webdriver.Chrome
     browserPath = '/usr/bin/google-chrome' if (not 'path' in browserData or not browserData['path'])\
