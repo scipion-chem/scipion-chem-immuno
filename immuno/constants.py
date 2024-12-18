@@ -29,9 +29,17 @@
 DEFAULT_VERSION = '1.0'
 
 # Package dictionaries
+IIITDW_DIC = {'name': 'IIITD_WEB',    'version': '3.0',
+              'home': 'IIITD_WEB_HOME', 'activation': 'IIITD_WEB_ACTIVATION_CMD',
+              'browser': 'IIITD_BROWSER', 'browserPath': 'IIITD_BROWSER_PATH'}
+
 IIITD_DIC = {'name': 'IIITD',    'version': '3.0',
-             'home': 'IIITD_HOME', 'activation': 'IIITD_ACTIVATION_CMD',
-             'browser': 'IIITD_BROWSER', 'browserPath': 'IIITD_BROWSER_PATH'}
+             'home': 'IIITD_HOME', 'activation': 'IIITD_ACTIVATION_CMD'}
+
+IL6PRED_DIC = {'name': 'IL6PRED',    'version': '1.1',
+               'home': 'IL6PRED_HOME', 'activation': 'IL6PRED_ACTIVATION_CMD'}
+
+IIITD_PACKAGES = ["toxinpred3", "toxinpred2", "algpred2", "ifnepitope2", "il5pred", "il13pred", "clbtope"]
 
 TOXINPRED, IL4PRED, IL10PRED, ALGPRED2, TOXINPRED2, IFNEPITOPE = 'ToxinPred', 'IL4pred', 'IL10pred', 'AlgPred2', \
                                                                  'ToxinPred2', 'IFNepitope'

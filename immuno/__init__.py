@@ -56,8 +56,9 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def _defineVariables(cls):
 		cls._defineVar(IIITD_DIC['activation'], cls.getEnvActivationCommand(IIITD_DIC))
-		cls._defineVar(IIITD_DIC['browser'], 'Chrome')
-		cls._defineVar(IIITD_DIC['browserPath'], '/usr/bin/google-chrome')
+		cls._defineVar(IIITDW_DIC['activation'], cls.getEnvActivationCommand(IIITDW_DIC))
+		cls._defineVar(IIITDW_DIC['browser'], 'Chrome')
+		cls._defineVar(IIITDW_DIC['browserPath'], '/usr/bin/google-chrome')
 
 		cls._defineEmVar(VAXIGNML_DIC['home'], VAXIGNML_DIC['name'] + '-' + VAXIGNML_DIC['version'])
 
@@ -65,6 +66,8 @@ class Plugin(pwchemPlugin):
 	def defineBinaries(cls, env, default=True):
 		"""This function defines the binaries for each package."""
 		cls.addIIITDPackage(env)
+		cls.addIIITDWPackage(env)
+		cls.addIL6PredPackage(env)
 		cls.addVaxignMLPackage(env)
 
 	@classmethod
@@ -72,9 +75,30 @@ class Plugin(pwchemPlugin):
 		installer = InstallHelper(IIITD_DIC['name'], packageHome=cls.getVar(IIITD_DIC['home']),
 															packageVersion=IIITD_DIC['version'])
 		# Installing IIITD package
+		installer.getCondaEnvCommand(pythonVersion='3.7', requirementsFile=False) \
+			.addCondaPackages(['selenium'], channel='conda-forge') \
+			.addCommand(f'{cls.getEnvActivationCommand(IIITD_DIC)} && pip install {" ".join(IIITD_PACKAGES)}', 'PIP_MODS_INSTALLED') \
+			.addPackage(env, ['conda', 'pip'], default=default)
+
+	@classmethod
+	def addIIITDWPackage(cls, env, default=True):
+		installer = InstallHelper(IIITDW_DIC['name'], packageHome=cls.getVar(IIITDW_DIC['home']),
+															packageVersion=IIITDW_DIC['version'])
+		# Installing IIITD package
 		installer.getCondaEnvCommand(pythonVersion='3.10', requirementsFile=False) \
 			.addCondaPackages(['selenium'], channel='conda-forge') \
-			.addPackage(env, ['git', 'conda'], default=default)
+			.addPackage(env, ['conda'], default=default)
+
+
+	@classmethod
+	def addIL6PredPackage(cls, env, default=True):
+		installer = InstallHelper(IL6PRED_DIC['name'], packageHome=cls.getVar(IL6PRED_DIC['home']),
+															packageVersion=IL6PRED_DIC['version'])
+		# Installing IL6PRED package
+		installer.getCondaEnvCommand(pythonVersion='3.7', requirementsFile=False) \
+			.addCondaPackages(['tqdm'], channel='conda-forge') \
+			.addCommand(f'pip install il6pred', 'IL6PRED_PIP_INSTALLED') \
+			.addPackage(env, ['conda', 'pip'], default=default)
 
 	@classmethod
 	def addVaxignMLPackage(cls, env, default=True):
