@@ -96,7 +96,7 @@ class Plugin(pwchemPlugin):
 		# Installing IL6PRED package
 		installer.getCondaEnvCommand(pythonVersion='3.7', requirementsFile=False) \
 			.addCondaPackages(['tqdm'], channel='conda-forge') \
-			.addCommand(f'pip install il6pred', 'IL6PRED_PIP_INSTALLED') \
+			.addCommand(f'{cls.getEnvActivationCommand(IL6PRED_DIC)} && pip install il6pred', 'IL6PRED_PIP_INSTALLED') \
 			.addPackage(env, ['conda', 'pip'], default=default)
 
 	@classmethod
