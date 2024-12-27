@@ -31,22 +31,13 @@ import multiprocessing, shutil, subprocess
 
 from scipion.install.funcs import InstallHelper
 
-from pwchem import Plugin as pwchemPlugin
-from pwchem.utils import insistentRun
+from pwchem.utils import insistentRun, getReplaceCommand
 
 from .utils import *
 from .constants import *
 
 # Pluging variables
 _logo = 'immuno_logo.png'
-
-def filterSequences(seqDic, softName):
-	fSeqs = seqDic.copy()
-	if softName in SEQ_LIMITS:
-		for seqId, seq in seqDic.items():
-			if len(seq) > SEQ_LIMITS[softName]:
-				del fSeqs[seqId]
-	return fSeqs
 
 
 class Plugin(pwchemPlugin):
@@ -75,8 +66,10 @@ class Plugin(pwchemPlugin):
 		installer = InstallHelper(IIITD_DIC['name'], packageHome=cls.getVar(IIITD_DIC['home']),
 															packageVersion=IIITD_DIC['version'])
 		# Installing IIITD package
-		installer.getCondaEnvCommand(pythonVersion='3.7', requirementsFile=False) \
-			.addCommand(f'{cls.getEnvActivationCommand(IIITD_DIC)} && pip install {" ".join(IIITD_PACKAGES)}', 'PIP_MODS_INSTALLED') \
+		installer.getCondaEnvCommand(pythonVersion=IIITD_DIC['python'], requirementsFile=False) \
+			.addCommand(f'{cls.getEnvActivationCommand(IIITD_DIC)} && pip install {" ".join(IIITD_PACKAGES)}',
+									'PIP_MODS_INSTALLED') \
+			.addCommand(f'{cls.getFixScripts(IIITD_DIC, IIITD_FIXES)}', 'SCRIPS_FIXED') \
 			.addPackage(env, ['conda', 'pip'], default=default)
 
 	@classmethod
@@ -94,9 +87,10 @@ class Plugin(pwchemPlugin):
 		installer = InstallHelper(IL6PRED_DIC['name'], packageHome=cls.getVar(IL6PRED_DIC['home']),
 															packageVersion=IL6PRED_DIC['version'])
 		# Installing IL6PRED package
-		installer.getCondaEnvCommand(pythonVersion='3.7', requirementsFile=False) \
+		installer.getCondaEnvCommand(pythonVersion=IL6PRED_DIC['python'], requirementsFile=False) \
 			.addCondaPackages(['tqdm'], channel='conda-forge') \
 			.addCommand(f'{cls.getEnvActivationCommand(IL6PRED_DIC)} && pip install il6pred', 'IL6PRED_PIP_INSTALLED') \
+			.addCommand(f'{cls.getFixScripts(IL6PRED_DIC, IL6_FIXES)}', 'SCRIPS_FIXED') \
 			.addPackage(env, ['conda', 'pip'], default=default)
 
 	@classmethod
@@ -153,7 +147,67 @@ class Plugin(pwchemPlugin):
 
 	@classmethod
 	def performEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, verbose=True):
-		'''Generalize caller to the evaluation functions.
+			sDics, sWebDics = {k: v for k, v in evalDics.items() if v['software'] in STAND_SOFT}, \
+												{k: v for k, v in evalDics.items() if v['software'] not in STAND_SOFT}
+
+			epiDics = {}
+			if len(sDics) > 0:
+				epiDics.update(cls.performStandEvaluations(sequences, sDics, jobs))
+			if len(sWebDics) > 0:
+				epiDics.update(cls.performWebEvaluations(sequences, sWebDics, jobs, browserData, verbose))
+			return epiDics
+
+	@classmethod
+	def performStandEvaluations(cls, sequences, evalDics, jobs, verbose=True):
+		'''Generalize caller to the standalone evaluation functions.
+    - sequences: dict with sequences in the form: {seqId: sequence}
+    - evalDics: dictionary as {evalKey: {parameterName: parameterValue}}
+    - jobs: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
+		funcDic = {
+			TOXINPRED: callIIITD, ALGPRED2: callIIITD, TOXINPRED2: callIIITD, IFNEPITOPE: callIIITD,
+			IL5PRED: callIIITD, IL6PRED: callIL6, IL13PRED: callIIITD,
+		}
+
+		# Create a pool of worker processes
+		nJobs = len(evalDics) if len(evalDics) < jobs else jobs
+		pool = multiprocessing.Pool(processes=nJobs)
+
+		resultsDic, fKeys = {}, {}
+		for evalKey, evalDic in evalDics.items():
+			softName = evalDic['software']
+			fKeys[(evalKey, softName)] = list(sequences.keys())
+			smallEvalDic = evalDic.copy()
+			del smallEvalDic['software']
+			if softName in funcDic:
+				outFile = f'/tmp/{evalKey}_output.csv'
+				resultsDic[(evalKey, softName)] = pool.apply_async(funcDic[softName],
+																													 args=(sequences, softName, smallEvalDic, outFile))
+
+		if verbose:
+			reportPoolStatus(resultsDic)
+
+		pool.close()
+		pool.join()
+
+		epiDics = {}
+		for (evalKey, softName), res in resultsDic.items():
+			fScores = res.get()['Score'] if 'Score' in res.get() else []
+			allScores, i = [], 0
+			for seqId in sequences:
+				if seqId in fKeys[(evalKey, softName)]:
+					allScores.append(fScores[i])
+					i += 1
+				else:
+					allScores.append(0)
+
+			epiDics[(evalKey, softName)] = allScores
+		return epiDics
+
+	@classmethod
+	def performWebEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, verbose=True):
+		'''Generalize caller to the web evaluation functions.
     - sequences: dict with sequences in the form: {seqId: sequence}
     - evalDics: dictionary as {evalKey: {parameterName: parameterValue}}
     - jobs: int, number of jobs for parallelization
@@ -171,13 +225,12 @@ class Plugin(pwchemPlugin):
 		resultsDic, fKeys = {}, {}
 		for evalKey, evalDic in evalDics.items():
 			softName = evalDic['software']
-			fSeqs = filterSequences(sequences, softName)
-			fKeys[(evalKey, softName)] = list(fSeqs.keys())
+			fKeys[(evalKey, softName)] = list(sequences.keys())
 			smallEvalDic = evalDic.copy()
 			del smallEvalDic['software']
 			if softName in funcDic:
 				resultsDic[(evalKey, softName)] = pool.apply_async(funcDic[softName],
-																													 args=(fSeqs, smallEvalDic, browserData))
+																													 args=(sequences, browserData, smallEvalDic))
 
 		if verbose:
 			reportPoolStatus(resultsDic)
@@ -234,4 +287,24 @@ class Plugin(pwchemPlugin):
 	# ---------------------------------- Utils functions-----------------------
 	@classmethod
 	def getBrowserData(cls):
-		return {'name': cls.getVar(IIITD_DIC['browser']), 'path': cls.getVar(IIITD_DIC['browserPath'])}
+		return {'name': cls.getVar(IIITDW_DIC['browser']), 'path': cls.getVar(IIITDW_DIC['browserPath'])}
+
+	@classmethod
+	def getEnvScriptsPath(cls, envDic, software, scriptName):
+		return pwchemPlugin.getEnvPath(envDic, f'lib/python{envDic["python"]}/site-packages/{software}'
+																					 f'/python_scripts/{scriptName}.py')
+
+	@classmethod
+	def getFixScripts(cls, envDic, fixDic):
+		cmds = []
+		for software, repDic in fixDic.items():
+			for fileName, repList in repDic.items():
+				scriptFile = cls.getEnvScriptsPath(envDic, software.lower(), fileName)
+				for repPair in repList:
+					cmds.append(getReplaceCommand(scriptFile, repPair[0], repPair[1]))
+		return ' && '.join(cmds)
+
+
+
+
+

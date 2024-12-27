@@ -37,23 +37,23 @@ class ProtIIITDEvaluations(EMProtocol):
   """Run evaluations on a set of epitopes (SetOfSequenceROIs)"""
   _label = 'IIITD epitope evaluations'
 
-  _evaluatorOptions = [TOXINPRED, ALGPRED2, IL4PRED, IL10PRED, IFNEPITOPE, TOXINPRED2]
+  _evaluatorOptions = [TOXINPRED, IFNEPITOPE, ALGPRED2, IL4PRED, IL5PRED, IL6PRED, IL10PRED, IL13PRED, TOXINPRED2]
 
-  _toxinSVMMethods = ["SVM(Swiss-Prot)", "SVM(Swiss-Prot)+Motif", "SVM(TrEMBL)", "SVM(TrEMBL)+Motif"]
-  _toxinQMMethods = ["Monopeptide(Swiss-Prot)", "Monopeptide(TrEMBL)", "Dipeptide(Swiss-Prot)", "Dipeptide(TrEMBL)"]
   _algMethods = ["AAC based RF", "Hybrid (RF+BLAST+MERCI)"]
   _il4Methods = ["SVM", "MERCI", "Hybrid", "Swiss-prot"]
   _il10Methods = ["SVM", "Random Forest"]
-  _ifnMethods = ["Motif", "SVM", "Hybrid"]
-  _ifnModels = ["IFN-gamma versus Non IFN-gamma", "IFN-gamma versus other cytokine", "IFN-gamma versus random"]
+  _ifnHosts = ["Human", "Mouse"]
   _toxin2Methods = ["AAC based RF", "Hybrid (RF+BLAST+MERCI)"]
 
 
-  _softParams = {TOXINPRED: ['toxinMethod', 'toxinSVMMethod', 'toxinQMMethod', 'toxinEval', 'toxinThval'],
-                 ALGPRED2: ['algMethod', 'algThres'],
+  _softParams = {TOXINPRED: ['toxinMethod', 'toxinThval'],
+                 IFNEPITOPE: ['ifnHost', 'ifnThval', 'ifnWindow'],
+                 ALGPRED2: ['algMethod', 'algThval'],
                  IL4PRED: ['il4Method', 'il4Thval'],
+                 IL5PRED: ['il5Thval', 'il5Window'],
+                 IL6PRED: ['il6Thval', 'il6Window'],
                  IL10PRED: ['il10Method', 'il10Thval'],
-                 IFNEPITOPE: ['ifnMethod'],
+                 IL13PRED: ['il13Thval', 'il13Window'],
                  TOXINPRED2: ['toxin2Method', 'toxin2Eval']
                  }
 
@@ -70,54 +70,75 @@ class ProtIIITDEvaluations(EMProtocol):
                     label='Choose evaluator: ', default=0, condition=f'{allCond}',
                     help=f'Epitope evaluation software to use.\n{TOXIN2WARN}')
 
-    aGroup.addParam('toxinMethod', params.EnumParam, choices=['SVM', 'Quantitative Matrix'], default=0,
-                    label='ToxinPred method: ', display=params.EnumParam.DISPLAY_HLIST, 
+    aGroup.addParam('toxinMethod', params.EnumParam, choices=['Machine Learning (ML)', 'Hybrid (MERCI + ML)'],
+                    default=0, label='ToxinPred3 method: ', display=params.EnumParam.DISPLAY_HLIST,
                     condition=f'{allCond} and chooseIIITDEvaluator==0',
-                    help='Which kind of ToxinPred method to use')
-    aGroup.addParam('toxinSVMMethod', params.EnumParam, choices=self._toxinSVMMethods, default=0, 
-                    label='ToxinPred SVM method: ', 
-                    condition=f'{allCond} and chooseIIITDEvaluator==0 and toxinMethod==0',
-                    help='Which SVM ToxinPred method to use')
-    aGroup.addParam('toxinQMMethod', params.EnumParam, choices=self._toxinQMMethods, default=0,
-                    label='ToxinPred QM method: ', condition=f'{allCond} and chooseIIITDEvaluator==0 and toxinMethod==1',
-                    help='Which Quantitative Matrix ToxinPred method to use')
-    aGroup.addParam('toxinEval', params.FloatParam, label='E-value cutoff: ', default=10.0,
-                    condition=f'{allCond} and chooseIIITDEvaluator==0 and toxinMethod==0 and toxinSVMMethod in [1, 3]',
-                    help='E-value to MAST search in Motif based methods')
-    aGroup.addParam('toxinThval', params.FloatParam, label='SVM threshold: ', default=0.0,
-                    condition=f'{allCond} and chooseIIITDEvaluator==0 and toxinMethod==0 and toxinSVMMethod in [0, 2]',
-                    help='Threshold for the SVM predictions (-1, 1)')
+                    help='Which kind of ToxinPred3 method to use. '
+                         'For more information. https://github.com/raghavagps/toxinpred3')
+    aGroup.addParam('toxinThval', params.FloatParam, label='Toxinpred3 threshold: ', default=0.38,
+                    condition=f'{allCond} and chooseIIITDEvaluator==0',
+                    help='Threshold for the predictions (0, 1). Score is proportional to toxic potential of peptide')
+
+    aGroup.addParam('ifnHost', params.EnumParam, choices=self._ifnHosts,
+                    label='IFNepitope2 host to use: ', default=0, condition=f'{allCond} and chooseIIITDEvaluator==1',
+                    help='IFNepitope2 host to use for epitope evaluation')
+    aGroup.addParam('ifnThval', params.FloatParam, label='IFNepitope2 threshold: ', default=0.49,
+                    condition=f'{allCond} and chooseIIITDEvaluator==1',
+                    help='Threshold for the predictions (0, 1). Score is proportional to toxic potential of peptide')
+    aGroup.addParam('ifnWindow', params.IntParam,
+                    label='IFNepitope2 window size: ', default=8, condition=f'{allCond} and chooseIIITDEvaluator==1',
+                    help='Window size for the scanning of IFNepitope2. User can chose from 8 to 20')
 
     aGroup.addParam('algMethod', params.EnumParam, label='AlgPred2 model: ', default=0,
-                    condition=f'{allCond} and chooseIIITDEvaluator==1', choices=self._algMethods,
+                    condition=f'{allCond} and chooseIIITDEvaluator==2', choices=self._algMethods,
                     help='Machine Learning Technique used for developing model.')
-    aGroup.addParam('algThres', params.FloatParam, choices=["on", "off"],
-                    label='AlgPred2 threshold: ', default=0.3, condition=f'{allCond} and chooseIIITDEvaluator==1',
-                    help='Threshold for the predictions (-0.5, 2)')
+    aGroup.addParam('algThval', params.FloatParam,
+                    label='AlgPred2 threshold: ', default=0.3, condition=f'{allCond} and chooseIIITDEvaluator==2',
+                    help='Threshold for the predictions (0, 1). '
+                         'Score is proportional to allergenic potential of peptide.')
 
     aGroup.addParam('il4Method', params.EnumParam, choices=self._il4Methods, label='IL4pred method to use: ', default=2,
-                    condition=f'{allCond} and chooseIIITDEvaluator==2', help='IL4pred model to use for epitope evaluation')
+                    condition=f'{allCond} and chooseIIITDEvaluator==3',
+                    help=f'IL4pred model to use for epitope evaluation.\n{ONLINE_WARN}')
     aGroup.addParam('il4Thval', params.FloatParam, label='SVM threshold: ', default=0.2,
-                    condition=f'{allCond} and chooseIIITDEvaluator==2 and il4Method==0',
-                    help='Threshold for the SVM predictions (-1, 1)')
+                    condition=f'{allCond} and chooseIIITDEvaluator==3 and il4Method==0',
+                    help=f'Threshold for the SVM predictions (-1, 1).\n{ONLINE_WARN}')
+
+    aGroup.addParam('il5Thval', params.FloatParam, label='IL5pred threshold: ', default=0.21,
+                    condition=f'{allCond} and chooseIIITDEvaluator==4',
+                    help='Threshold for the SVM predictions (0, 1).')
+    aGroup.addParam('il5Window', params.IntParam,
+                    label='IL5pred window size: ', default=9, condition=f'{allCond} and chooseIIITDEvaluator==4',
+                    help='Window size for the scanning of IL5pred. User can chose from 9 to 24')
+
+    aGroup.addParam('il6Thval', params.FloatParam, label='IL6pred threshold: ', default=0.11,
+                    condition=f'{allCond} and chooseIIITDEvaluator==5',
+                    help='Threshold for the SVM predictions (0, 1).')
+    aGroup.addParam('il6Window', params.IntParam,
+                    label='IL6pred window size: ', default=10, condition=f'{allCond} and chooseIIITDEvaluator==5',
+                    help='Window size for the scanning of IL6pred. User can chose from 5 to 29')
 
     aGroup.addParam('il10Method', params.EnumParam, choices=self._il10Methods, label='IL10pred method to use: ',
-                    default=0, condition=f'{allCond} and chooseIIITDEvaluator==3',
-                    help='IL10pred model to use for epitope evaluation')
+                    default=0, condition=f'{allCond} and chooseIIITDEvaluator==6',
+                    help=f'IL10pred model to use for epitope evaluation.\n{ONLINE_WARN}')
     aGroup.addParam('il10Thval', params.FloatParam, label='IL10pred threshold: ', default=-0.3,
-                    condition=f'{allCond} and chooseIIITDEvaluator==3',
-                    help='Threshold for the SVM/Random Forest predictions (-1, 1)')
+                    condition=f'{allCond} and chooseIIITDEvaluator==6',
+                    help=f'Threshold for the SVM/Random Forest predictions (-1, 1)\n{ONLINE_WARN}')
 
-    aGroup.addParam('ifnMethod', params.EnumParam, choices=self._ifnMethods, label='IFNepitope approach to use: ',
-                    default=2, condition=f'{allCond} and chooseIIITDEvaluator==4',
-                    help='IFNepitope approach to use for epitope evaluation')
+    aGroup.addParam('il13Thval', params.FloatParam, label='IL13pred threshold: ', default=0.06,
+                    condition=f'{allCond} and chooseIIITDEvaluator==7',
+                    help='Threshold for the SVM predictions (0, 1).')
+    aGroup.addParam('il13Window', params.IntParam,
+                    label='IL13pred window size: ', default=9, condition=f'{allCond} and chooseIIITDEvaluator==7',
+                    help='Window size for the scanning of IL13pred. User can chose from 8 to 35')
 
     aGroup.addParam('toxin2Method', params.EnumParam, choices=self._toxin2Methods, default=0,
-                    label='ToxinPred2 method: ', condition=f'{allCond} and chooseIIITDEvaluator==5',
+                    label='ToxinPred2 method: ', condition=f'{allCond} and chooseIIITDEvaluator==8',
                     help=f'Which ToxinPred2 method to use.\n{TOXIN2WARN}')
-    aGroup.addParam('toxin2Eval', params.FloatParam, label='Threshold value: ', default=0.6,
-                    condition=f'{allCond} and chooseIIITDEvaluator==5',
-                    help=f'Threshold for the SVM predictions (-0.5, 2).\n{TOXIN2WARN}')
+    aGroup.addParam('toxin2Thval', params.FloatParam, label='Threshold value: ', default=0.6,
+                    condition=f'{allCond} and chooseIIITDEvaluator==8',
+                    help=f'Threshold for the predictions (0, 1). Score is proportional to toxic potential of peptide.'
+                         f'\n{TOXIN2WARN}')
 
     return aGroup
 
@@ -149,7 +170,7 @@ class ProtIIITDEvaluations(EMProtocol):
 
   def evaluationStep(self):
     nt = self.numberOfThreads.get()
-    sDics = self.getWebEvaluatorDics()
+    sDics = self.getEvaluatorDics()
     sequences = self.getInputSequences()
 
     epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData())
@@ -207,17 +228,17 @@ class ProtIIITDEvaluations(EMProtocol):
       value = getattr(self, paramName).get()
     return value
 
-  def getWebEvaluatorDics(self):
+  def getEvaluatorDics(self):
     ''' Returns the selector dictionary with the parameter names expected by the web server
     :return: dic, {selName: {software: softName, paramName: paramValue}} with the webserver chosen parameters
     '''
-    sDic = self.parseElementsDic()
-    wsDic = mapEvalParamNames(sDic)
-    return wsDic
+    sDics = self.parseElementsDic()
+    sDics = mapEvalParamNames(sDics)
+    return sDics
 
   def _validate(self):
     vs = []
-    if len(self.getWebEvaluatorDics()) < 1:
+    if len(self.getEvaluatorDics()) < 1:
       vs.append('You need to add at least one evaluator to run the protocol')
     return vs
 
@@ -228,7 +249,7 @@ class ProtIIITDEvaluations(EMProtocol):
       if curLen > maxLen:
         maxLen = curLen
 
-    softs = [inDic['software'] for inDic in self.getWebEvaluatorDics().values()]
+    softs = [inDic['software'] for inDic in self.getEvaluatorDics().values()]
 
     for soft in softs:
       if soft in SEQ_LIMITS:

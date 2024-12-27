@@ -27,6 +27,8 @@
 import time, os, requests
 from Bio import SeqIO
 
+from pwchem import Plugin as pwchemPlugin
+
 from ..constants import *
 
 def runEpitopeSelection(softwareName, argsDic, browserData={}):
@@ -253,6 +255,41 @@ def filterSequences(inSeqDic, minLen=0, maxLen=100000):
       passDic[seqId] = seq
 
   return passDic
+
+########## STANDALONE CALLS ###########
+
+def callIIITD(seqDic, software, evalDic, outFile):
+  faFile = getFastaFiles(seqDic, software, maxChunk=100)[0]
+  args = f'-i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
+  pwchemPlugin.runCondaCommand(None, args, IIITD_DIC, software.lower(), popen=True)
+  scores = parseIIITD(outFile, software)
+  return {'Score': scores}
+
+def callIL6(seqDic, software, evalDic, outFile):
+  faFile = getFastaFiles(seqDic, software, maxChunk=100)[0]
+  args = f'-i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
+  pwchemPlugin.runCondaCommand(None, args, IL6PRED_DIC, software.lower(), popen=True)
+  scores = parseIIITD(outFile, software)
+  return {'Score': scores}
+
+
+def getArgs(evalDic):
+  mapKeysDic = {'Thval': '-t', 'Window': '-w', 'Method': '-m', 'Host': '-s'}
+  mapValsDic = {'Machine Learning (ML)': 1, 'Hybrid (MERCI + ML)': 2,
+                'Human': 1, 'Mouse': 2,
+                "AAC based RF": 1, "Hybrid (RF+BLAST+MERCI)": 2}
+
+  curEDic = {}
+  for pName, pVal in evalDic.items():
+    for mapShort, mapVal in mapKeysDic.items():
+      if mapShort in pName:
+        curEDic[mapVal] = pVal
+
+        if pVal in mapValsDic:
+          curEDic[mapVal] = mapValsDic[pVal]
+
+  return ' '.join(f'{k} {v}' for k, v in curEDic.items())
+
 
 ########## REQUESTS ##########
 
@@ -627,6 +664,18 @@ def parseAlgPred2(driver):
       resDic[labels[i]].append(cell.text)
   outDic = renameScore(resDic)
   return outDic
+
+def parseIIITD(outFile, software):
+  scoreCol = {'toxinpred3': 2, 'algpred2': 2, 'ifnepitope2': 4, 'il13pred': 3, 'il5pred': 4,
+              'il6pred': 3, 'toxinpred2': 2}
+  sCol = scoreCol[software.lower()]
+
+  scores = []
+  with open(outFile) as f:
+    f.readline()
+    for line in f:
+      scores.append(float(line.split(',')[sCol]))
+  return scores
 
 def renameScore(outDic, scoreKey=''):
   '''Rename the score key in a dict with just "Score"'''
