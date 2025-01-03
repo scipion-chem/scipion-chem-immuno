@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import time, os, requests
+import time, os, requests, subprocess as sp
 from Bio import SeqIO
 
 from pwchem import Plugin as pwchemPlugin
@@ -99,12 +99,12 @@ def getFastaStrs(seqDic, maxChunk=1):
   seqLists = divide_chunks(seqList, maxChunk)
   return buildSeqFasta(seqLists)
 
-def getFastaFiles(seqDic, evalSoft, maxChunk=1):
+def getFastaFiles(seqDic, evalSoft, outDir, maxChunk=1):
   '''Write a series of fasta files with maxChunk number of sequences from a set of sequences'''
   fastaStrs = getFastaStrs(seqDic, maxChunk)
   faFiles = []
   for i, fStr in enumerate(fastaStrs):
-    faFiles.append(f'/tmp/{evalSoft}_input_{i}.fa')
+    faFiles.append(os.path.join(outDir, f'{evalSoft}_input_{i}.fa'))
     with open(faFiles[-1], 'w') as f:
       f.write(fStr)
   return faFiles
@@ -259,19 +259,15 @@ def filterSequences(inSeqDic, minLen=0, maxLen=100000):
 ########## STANDALONE CALLS ###########
 
 def callIIITD(seqDic, software, evalDic, outFile):
-  faFile = getFastaFiles(seqDic, software, maxChunk=100)[0]
-  args = f'-i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
-  pwchemPlugin.runCondaCommand(None, args, IIITD_DIC, software.lower(), popen=True)
-  scores = parseIIITD(outFile, software)
-  return {'Score': scores}
+  outDir = os.path.dirname(outFile)
+  faFile = getFastaFiles(seqDic, software, outDir, maxChunk=100)[0]
+  args = f' -i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
+  envDic = IL6PRED_DIC if software.lower() == 'il6pred' else IIITD_DIC
 
-def callIL6(seqDic, software, evalDic, outFile):
-  faFile = getFastaFiles(seqDic, software, maxChunk=100)[0]
-  args = f'-i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
-  pwchemPlugin.runCondaCommand(None, args, IL6PRED_DIC, software.lower(), popen=True)
-  scores = parseIIITD(outFile, software)
-  return {'Score': scores}
-
+  if os.path.exists(outFile):
+    os.remove(outFile)
+  fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {software.lower()} '
+  return sp.Popen(fullProgram + args, shell=True)
 
 def getArgs(evalDic):
   mapKeysDic = {'Thval': '-t', 'Window': '-w', 'Method': '-m', 'Host': '-s'}

@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 
+import os
+
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
@@ -54,7 +56,7 @@ class ProtIIITDEvaluations(EMProtocol):
                  IL6PRED: ['il6Thval', 'il6Window'],
                  IL10PRED: ['il10Method', 'il10Thval'],
                  IL13PRED: ['il13Thval', 'il13Window'],
-                 TOXINPRED2: ['toxin2Method', 'toxin2Eval']
+                 TOXINPRED2: ['toxin2Method', 'toxin2Thval']
                  }
 
   def __init__(self, **kwargs):
@@ -172,8 +174,9 @@ class ProtIIITDEvaluations(EMProtocol):
     nt = self.numberOfThreads.get()
     sDics = self.getEvaluatorDics()
     sequences = self.getInputSequences()
+    outDir = os.path.abspath(self._getExtraPath())
 
-    epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData())
+    epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData(), outDir=outDir)
 
     outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
     for i, roi in enumerate(self.inputROIs.get()):

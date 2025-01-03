@@ -146,54 +146,51 @@ class Plugin(pwchemPlugin):
 		return epiDics
 
 	@classmethod
-	def performEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, verbose=True):
+	def performEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, outDir='/tmp', verbose=True):
 			sDics, sWebDics = {k: v for k, v in evalDics.items() if v['software'] in STAND_SOFT}, \
 												{k: v for k, v in evalDics.items() if v['software'] not in STAND_SOFT}
 
 			epiDics = {}
 			if len(sDics) > 0:
-				epiDics.update(cls.performStandEvaluations(sequences, sDics, jobs))
+				epiDics.update(cls.performStandEvaluations(sequences, sDics, outDir))
 			if len(sWebDics) > 0:
 				epiDics.update(cls.performWebEvaluations(sequences, sWebDics, jobs, browserData, verbose))
 			return epiDics
 
 	@classmethod
-	def performStandEvaluations(cls, sequences, evalDics, jobs, verbose=True):
+	def performStandEvaluations(cls, sequences, evalDics, outDir):
 		'''Generalize caller to the standalone evaluation functions.
     - sequences: dict with sequences in the form: {seqId: sequence}
     - evalDics: dictionary as {evalKey: {parameterName: parameterValue}}
     - jobs: int, number of jobs for parallelization
     Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
     '''
-		funcDic = {
-			TOXINPRED: callIIITD, ALGPRED2: callIIITD, TOXINPRED2: callIIITD, IFNEPITOPE: callIIITD,
-			IL5PRED: callIIITD, IL6PRED: callIL6, IL13PRED: callIIITD,
-		}
 
-		# Create a pool of worker processes
-		nJobs = len(evalDics) if len(evalDics) < jobs else jobs
-		pool = multiprocessing.Pool(processes=nJobs)
-
-		resultsDic, fKeys = {}, {}
+		resultsDic, fKeys, outDic, sevalDics = {}, {}, {}, {}
 		for evalKey, evalDic in evalDics.items():
 			softName = evalDic['software']
 			fKeys[(evalKey, softName)] = list(sequences.keys())
 			smallEvalDic = evalDic.copy()
 			del smallEvalDic['software']
-			if softName in funcDic:
-				outFile = f'/tmp/{evalKey}_output.csv'
-				resultsDic[(evalKey, softName)] = pool.apply_async(funcDic[softName],
-																													 args=(sequences, softName, smallEvalDic, outFile))
+			sevalDics[(evalKey, softName)] = smallEvalDic
+			outDic[(evalKey, softName)] = os.path.join(outDir, f'{evalKey}_output.csv')
+			resultsDic[(evalKey, softName)] = callIIITD(sequences, softName, smallEvalDic, outDic[(evalKey, softName)])
 
-		if verbose:
-			reportPoolStatus(resultsDic)
+		# Check Subprocesses status and restart if failed
+		pDic = {(evalKey, softName): None for (evalKey, softName) in resultsDic}
+		while None in pDic.values():
+			time.sleep(1)
+			pDic = {}
+			for (evalKey, softName), p in resultsDic.items():
+				pDic[(evalKey, softName)] = p.poll()
+				if pDic[(evalKey, softName)] == 1:
+					resultsDic[(evalKey, softName)] = callIIITD(sequences, softName,
+																											sevalDics[(evalKey, softName)], outDic[(evalKey, softName)])
 
-		pool.close()
-		pool.join()
-
+		# Parse output results
 		epiDics = {}
 		for (evalKey, softName), res in resultsDic.items():
-			fScores = res.get()['Score'] if 'Score' in res.get() else []
+			fScores = parseIIITD(outDic[(evalKey, softName)], softName)
 			allScores, i = [], 0
 			for seqId in sequences:
 				if seqId in fKeys[(evalKey, softName)]:
