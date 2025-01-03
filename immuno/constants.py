@@ -87,7 +87,8 @@ NEW_AAC = '''def aac_comp(file,out):
     df2.columns = head
     df2.to_csv(out, index=None, header=False)'''
 
-IIITD_FIXES = {TOXINPRED: {'toxinpred3': [("np.loadtxt(file_name, delimiter=',')", "np.loadtxt(file_name, delimiter=',', ndmin=2)")]},
+IIITD_FIXES = {TOXINPRED: {'toxinpred3': [("np.loadtxt(file_name, delimiter=',')", "np.loadtxt(file_name, delimiter=',', ndmin=2)"),
+                                          ("np.loadtxt(file_name3, delimiter=',')", "np.loadtxt(file_name3, delimiter=',', ndmin=2)")]},
                TOXINPRED2: {'toxinpred2': [("np.loadtxt(file_name, delimiter=',')", "np.loadtxt(file_name, delimiter=',', ndmin=2)")]},
                IFNEPITOPE: {'ifnepitope2': [('blastdb1 = nf_path + "\/\.\.\/blast_db\/human_db"', ''),
                             ('blastdb2 = nf_path + "\/\.\.\/blast_db\/mouse_db"', 'blastdb = nf_path + "\/\.\.\/blast_db"')]},
