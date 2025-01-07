@@ -149,9 +149,13 @@ SELSUM = '''1) "ABCpred-1": {'software': 'ABCpred', 'abcWindow': '16', 'abcThres
 2) "LBtope-1": {'software': 'LBtope', 'lbModel': 'LBtope_Variable', 'lbThres': '60', 'lbLength': 15}
 '''
 
-EVALSUM = f'''1) "ToxinPred-1": {{'software': '{TOXINPRED}', 'toxinMethod': 'SVM', 'toxinSVMMethod': 'SVM(Swiss-Prot)', 'toxinQMMethod': 'Monopeptide(Swiss-Prot)', 'toxinEval': 10.0, 'toxinThval': 0.0}}
-2) "AlgPred2-1": {{'software': '{ALGPRED2}', 'algMethod': 'AAC based RF', 'algThval': 0.3}}
-3) "IL4pred-1": {{'software': '{IL4PRED}', 'il4Method': 'Hybrid', 'il4Thval': 0.2}}
-4) "IL10pred-1": {{'software': '{IL10PRED}', 'il10Method': 'SVM', 'il10Thval': -0.3}}
-5) "IFNepitope-1": {{'software': '{IFNEPITOPE}', 'ifnMethod': 'Hybrid'}}
+EVALSUM = '''1) "ToxinPred3-1": {'software': 'ToxinPred3', 'toxinMethod': 'Machine Learning (ML)', 'toxinThval': 0.38}
+2) "IFNepitope2-1": {'software': 'IFNepitope2', 'ifnHost': 'Human', 'ifnThval': 0.49, 'ifnWindow': 8}
+3) "AlgPred2-1": {'software': 'AlgPred2', 'algMethod': 'AAC based RF', 'algThval': 0.3}
+4) "IL4pred-1": {'software': 'IL4pred', 'il4Method': 'Hybrid', 'il4Thval': 0.2}
+5) "IL5pred-1": {'software': 'IL5pred', 'il5Thval': 0.21, 'il5Window': 9}
+6) "IL6pred-1": {'software': 'IL6pred', 'il6Thval': 0.11, 'il6Window': 10}
+7) "IL10pred-1": {'software': 'IL10pred', 'il10Method': 'SVM', 'il10Thval': -0.3}
+8) "IL13pred-1": {'software': 'IL13pred', 'il13Thval': 0.06, 'il13Window': 9}
+9) "ToxinPred2-1": {'software': 'ToxinPred2', 'toxin2Method': 'AAC based RF', 'toxin2Thval': 0.6}
 '''
