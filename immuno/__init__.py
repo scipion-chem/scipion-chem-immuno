@@ -268,7 +268,8 @@ class Plugin(pwchemPlugin):
 		args = [f'-{k} {v}' for k,v in kwargs.items()]
 		args = ' '.join(args)
 
-		subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
+		insistentRun(protocol, program, args, cwd=cwd, popen=True, stdout=subprocess.DEVNULL)
+		# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
 
 		# Copying results dir with no-root user
 		shutil.copytree(tmpDir, oDir)
@@ -277,7 +278,7 @@ class Plugin(pwchemPlugin):
 		if os.path.exists(tmpDir):
 			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
 			args = f'/mnt/{tmpDir}'
-			insistentRun(protocol, program, args, cwd=cwd)
+			insistentRun(protocol, program, args, cwd=cwd, popen=True)
 			# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
 
 
