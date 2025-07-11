@@ -34,7 +34,47 @@ from ..constants import TOXIN2WARN
 from ..utils import mapEvalParamNames
 
 class ProtIIITDEvaluations(EMProtocol):
-  """Run evaluations on a set of epitopes (SetOfSequenceROIs)"""
+  """Run evaluations on a set of epitopes (SetOfSequenceROIs)
+  User IA Manual: AddEpitopeEvaluations Protocol
+
+The AddEpitopeEvaluations protocol is used to integrate and annotate peptide
+epitope candidates with additional metadata, scores, or labels derived from
+previous analyses. It serves as a flexible layer for enriching peptide records
+with immunological, structural, or computational descriptors that help guide
+selection and prioritization in downstream workflows.
+
+To run the protocol, the user must provide a table or list of peptide sequences.
+These sequences typically originate from MHC binding prediction, immunogenicity
+scoring, or experimental screening. The input can be connected directly from
+previous Scipion-Chem protocols or imported as an external dataset in a supported
+format. Each peptide acts as a unique entry that can be matched and extended with
+custom evaluation fields.
+
+The user defines the additional evaluations by specifying the source of each
+annotation. These sources may include scalar values, categorical labels,
+threshold-based classifications, or scores derived from structural or functional
+analyses. For example, one might append hydrophobicity values, predicted
+toxicity, mutation counts, or coverage percentages. Each annotation is tied to a
+column and matched to peptides based on sequence identity.
+
+The protocol ensures that all appended data is properly aligned and validated.
+In cases where a peptide in the input list lacks a corresponding annotation,
+the user can choose whether to assign a default value, leave the field empty,
+or discard the entry. This control allows tailoring the enrichment step to
+specific use cases, such as epitope ranking, visualization, or filtering.
+
+Once executed, the protocol outputs a unified table containing the original
+peptide data alongside the appended evaluations. This enriched dataset can be
+passed to scoring, clustering, or visualization protocols within Scipion-Chem,
+or exported for reporting and downstream analysis. The process is fully
+reproducible, and all parameter choices are stored with the session metadata.
+
+In summary, the AddEpitopeEvaluations protocol facilitates the aggregation of
+diverse epitope descriptors into a single, interpretable format. It enables
+rational prioritization of candidate peptides by incorporating multi-source
+evaluations, streamlining the selection process in immunoinformatics pipelines.
+  
+  """
   _label = 'IIITD epitope evaluations'
 
   _evaluatorOptions = ['ToxinPred', 'AlgPred2', 'IL4pred', 'IL10pred', 'IFNepitope', 'ToxinPred2']
