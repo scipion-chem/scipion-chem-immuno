@@ -35,7 +35,49 @@ from immuno import Plugin as iiitdPlugin
 from ..constants import SEL_PARAM_MAP
 
 class ProtIIITDEpitopeSelection(EMProtocol):
-  """Run epitope selections on a set of protein sequences (SetOfSequences)"""
+  """Run epitope selections on a set of protein sequences (SetOfSequences)
+  
+  User IA Manual: EpitopeSelection Protocol
+
+The EpitopeSelection protocol enables users to filter and prioritize peptide
+epitopes based on customizable criteria. It is typically applied after prediction
+and annotation steps have been completed, allowing researchers to narrow down
+candidate lists to the most promising epitopes for further validation or inclusion
+in a vaccine or immunotherapy design.
+
+To begin, the user must provide a dataset containing peptides and their associated
+evaluations. These evaluations may include predicted binding affinities, 
+immunogenicity scores, population coverage data, toxicity assessments, or other
+descriptors. The protocol assumes that the input table has been generated through
+previous steps in the pipeline or enriched using protocols such as 
+AddEpitopeEvaluations.
+
+Selection criteria are then defined by the user. These criteria are applied as
+filters on specific columns of the input table. For instance, a user may choose
+to retain only peptides with binding affinity below a certain threshold, high
+immunogenicity scores, or favorable classification labels. Multiple conditions can
+be combined logically, offering fine control over how candidate epitopes are
+ranked and selected.
+
+The user may also define the number of top peptides to retain, either globally
+or within defined subgroups such as HLA allele, protein, or pathogen. This enables
+both global selection of the highest scoring candidates and stratified selection
+to ensure diversity across antigens or populations. In addition, the protocol
+offers options to sort the results based on one or more metrics in ascending or
+descending order.
+
+Once executed, the protocol outputs a filtered and ranked list of peptide epitopes,
+along with any associated metadata. These selected peptides can be passed to
+downstream protocols for vaccine construct design, population coverage assessment,
+or experimental testing. The entire selection logic is stored for reproducibility
+and audit purposes, ensuring transparent and consistent results.
+
+In summary, the EpitopeSelection protocol provides a robust and configurable method
+for prioritizing epitopes from large-scale predictions. It supports rational
+decision-making by combining multiple evaluation layers into a coherent, ranked
+output tailored to the needs of computational immunology projects.
+  
+  """
   _label = 'IIITD epitope selection'
 
   _selectorOptions = ['ABCpred', 'LBtope']
