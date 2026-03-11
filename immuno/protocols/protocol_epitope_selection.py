@@ -37,45 +37,152 @@ from ..constants import SEL_PARAM_MAP
 class ProtIIITDEpitopeSelection(EMProtocol):
   """Run epitope selections on a set of protein sequences (SetOfSequences)
   
-  User IA Manual: EpitopeSelection Protocol
+  AI Generated:
 
-The EpitopeSelection protocol enables users to filter and prioritize peptide
-epitopes based on customizable criteria. It is typically applied after prediction
-and annotation steps have been completed, allowing researchers to narrow down
-candidate lists to the most promising epitopes for further validation or inclusion
-in a vaccine or immunotherapy design.
+    ProtIIITDEpitopeSelection - User Manual
 
-To begin, the user must provide a dataset containing peptides and their associated
-evaluations. These evaluations may include predicted binding affinities, 
-immunogenicity scores, population coverage data, toxicity assessments, or other
-descriptors. The protocol assumes that the input table has been generated through
-previous steps in the pipeline or enriched using protocols such as 
-AddEpitopeEvaluations.
+    Overview
+    --------
+    The ProtIIITDEpitopeSelection protocol performs epitope prediction and
+    selection on a protein sequence using tools provided by the IIITD
+    (Immunoinformatics) framework. The protocol integrates multiple
+    epitope prediction methods, allowing users to identify candidate
+    B-cell epitopes based on sequence patterns and machine learning models.
 
-Selection criteria are then defined by the user. These criteria are applied as
-filters on specific columns of the input table. For instance, a user may choose
-to retain only peptides with binding affinity below a certain threshold, high
-immunogenicity scores, or favorable classification labels. Multiple conditions can
-be combined logically, offering fine control over how candidate epitopes are
-ranked and selected.
+    This protocol is typically used in immunoinformatics workflows such
+    as vaccine design, antigen analysis, and antibody research. By applying
+    multiple prediction methods and customizable parameters, users can
+    identify regions of a protein sequence that are likely to act as
+    B-cell epitopes.
 
-The user may also define the number of top peptides to retain, either globally
-or within defined subgroups such as HLA allele, protein, or pathogen. This enables
-both global selection of the highest scoring candidates and stratified selection
-to ensure diversity across antigens or populations. In addition, the protocol
-offers options to sort the results based on one or more metrics in ascending or
-descending order.
+    Input Requirements
+    ------------------
+    - **Sequence**:
+        A protein sequence provided as a `Sequence` object. The sequence
+        should represent the antigen or protein of interest where epitopes
+        will be identified.
 
-Once executed, the protocol outputs a filtered and ranked list of peptide epitopes,
-along with any associated metadata. These selected peptides can be passed to
-downstream protocols for vaccine construct design, population coverage assessment,
-or experimental testing. The entire selection logic is stored for reproducibility
-and audit purposes, ensuring transparent and consistent results.
+    Parameters
+    ----------
+    The protocol supports different epitope selection tools. Each selector
+    can be configured with its own parameters and multiple selectors can
+    be applied within a single run.
 
-In summary, the EpitopeSelection protocol provides a robust and configurable method
-for prioritizing epitopes from large-scale predictions. It supports rational
-decision-making by combining multiple evaluation layers into a coherent, ranked
-output tailored to the needs of computational immunology projects.
+    - **Selector software (chooseSelector)**:
+        Determines which epitope prediction method will be used. Supported
+        methods include:
+
+            • **ABCpred** – Neural network-based B-cell epitope predictor
+            • **LBtope** – Machine learning predictor based on known
+              linear B-cell epitopes
+
+    ABCpred Parameters
+    ------------------
+    - **Window size (abcWindow)**:
+        Defines the length of predicted epitopes (typically 16 or 18 residues).
+
+    - **Threshold (abcThres)**:
+        Minimum score required for a peptide to be considered a positive
+        epitope prediction.
+
+    - **Overlap filter (abcFilter)**:
+        Controls whether overlapping predicted epitopes should be filtered.
+
+    LBtope Parameters
+    -----------------
+    - **Prediction model (lbModel)**:
+        Defines the LBtope prediction model to use. Options include fixed
+        or variable models trained on redundant or non-redundant datasets.
+
+    - **Probability threshold (lbThres)**:
+        Defines the probability cutoff used to classify peptides as
+        epitopes.
+
+    - **Epitope length (lbLength)**:
+        Size of the predicted peptide epitopes.
+
+    Selector Management
+    -------------------
+    - **Selector name (selectorName)**:
+        Optional identifier assigned to the defined selector.
+
+    - **Selectors summary (inSels)**:
+        Displays the list of configured selectors that will be applied
+        during the protocol execution.
+
+    Multiple selectors can be defined and combined, allowing comparison
+    between prediction methods or integration of different epitope
+    selection strategies.
+
+    Workflow
+    --------
+    1. **Input preparation**
+       - The protein sequence is exported to FASTA format.
+
+    2. **Selector configuration**
+       - One or more epitope prediction selectors are defined.
+       - Each selector is associated with a prediction tool and
+         corresponding parameters.
+
+    3. **Epitope prediction**
+       - The IIITD epitope prediction framework is executed using the
+         configured selectors.
+       - Each tool analyzes the protein sequence and predicts potential
+         epitope regions.
+
+    4. **Result parsing**
+       - Predicted epitopes are extracted from the prediction results.
+       - Epitope sequences, positions, and scores are collected.
+
+    5. **Output generation**
+       - Predicted epitopes are stored as sequence regions of interest
+         (`SequenceROI`) associated with the input protein sequence.
+
+    Outputs
+    -------
+    - **SetOfSequenceROIs**:
+        A set of predicted epitope regions. Each entry contains:
+
+            • Epitope sequence
+            • Start and end positions within the protein
+            • Prediction score
+            • Source prediction tool
+
+    These regions can be used in downstream workflows such as epitope
+    prioritization, vaccine construct design, or immunogenicity analysis.
+
+    Interpretation
+    --------------
+    - Higher prediction scores indicate stronger confidence that a
+      peptide segment functions as a B-cell epitope.
+    - Results from multiple selectors can be compared to identify
+      consensus epitopes across prediction tools.
+    - Overlapping predictions may highlight highly immunogenic regions.
+
+    Practical Recommendations
+    -------------------------
+    - Use complete antigen sequences to obtain biologically meaningful
+      predictions.
+    - Combine multiple selectors to improve robustness of epitope
+      identification.
+    - Use prediction scores together with experimental or structural
+      information for final epitope selection.
+
+    Warnings
+    --------
+    - Computational epitope predictions are probabilistic and should be
+      validated experimentally whenever possible.
+    - Prediction performance may vary depending on protein family,
+      sequence length, and training data of the models.
+
+    Final Perspective
+    -----------------
+    ProtIIITDEpitopeSelection provides a flexible framework for identifying
+    B-cell epitopes using multiple immunoinformatics prediction tools.
+    By enabling configurable selectors and standardized outputs, the
+    protocol facilitates systematic epitope discovery and supports
+    downstream applications in vaccine development and immunological
+    research.
   
   """
   _label = 'IIITD epitope selection'

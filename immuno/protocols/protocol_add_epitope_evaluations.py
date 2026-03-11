@@ -35,45 +35,145 @@ from ..utils import mapEvalParamNames
 
 class ProtIIITDEvaluations(EMProtocol):
   """Run evaluations on a set of epitopes (SetOfSequenceROIs)
-  User IA Manual: AddEpitopeEvaluations Protocol
 
-The AddEpitopeEvaluations protocol is used to integrate and annotate peptide
-epitope candidates with additional metadata, scores, or labels derived from
-previous analyses. It serves as a flexible layer for enriching peptide records
-with immunological, structural, or computational descriptors that help guide
-selection and prioritization in downstream workflows.
+    AI Generated:
 
-To run the protocol, the user must provide a table or list of peptide sequences.
-These sequences typically originate from MHC binding prediction, immunogenicity
-scoring, or experimental screening. The input can be connected directly from
-previous Scipion-Chem protocols or imported as an external dataset in a supported
-format. Each peptide acts as a unique entry that can be matched and extended with
-custom evaluation fields.
+        ProtIIITDEvaluations - User Manual
 
-The user defines the additional evaluations by specifying the source of each
-annotation. These sources may include scalar values, categorical labels,
-threshold-based classifications, or scores derived from structural or functional
-analyses. For example, one might append hydrophobicity values, predicted
-toxicity, mutation counts, or coverage percentages. Each annotation is tied to a
-column and matched to peptides based on sequence identity.
+        Overview
+        --------
+        The ProtIIITDEvaluations protocol performs computational evaluations on a
+        set of predicted epitopes in order to characterize their biological and
+        immunological properties. It integrates several immunoinformatics tools
+        developed by IIITD to assess attributes such as toxicity, allergenicity,
+        and cytokine-inducing potential.
 
-The protocol ensures that all appended data is properly aligned and validated.
-In cases where a peptide in the input list lacks a corresponding annotation,
-the user can choose whether to assign a default value, leave the field empty,
-or discard the entry. This control allows tailoring the enrichment step to
-specific use cases, such as epitope ranking, visualization, or filtering.
+        This protocol is typically used after epitope prediction steps in vaccine
+        design or immunological pipelines. By adding evaluation scores and labels
+        to candidate epitopes, the protocol enables more informed prioritization
+        and filtering before downstream experimental validation.
 
-Once executed, the protocol outputs a unified table containing the original
-peptide data alongside the appended evaluations. This enriched dataset can be
-passed to scoring, clustering, or visualization protocols within Scipion-Chem,
-or exported for reporting and downstream analysis. The process is fully
-reproducible, and all parameter choices are stored with the session metadata.
+        Input Requirements
+        ------------------
+        - **SetOfSequenceROIs**:
+            A set of peptide epitopes represented as `SequenceROI` objects.
+            These typically originate from epitope prediction protocols such
+            as B-cell or T-cell epitope discovery workflows.
 
-In summary, the AddEpitopeEvaluations protocol facilitates the aggregation of
-diverse epitope descriptors into a single, interpretable format. It enables
-rational prioritization of candidate peptides by incorporating multi-source
-evaluations, streamlining the selection process in immunoinformatics pipelines.
-  
+        Parameters
+        ----------
+        The protocol allows users to define one or more epitope evaluation
+        methods. Each evaluator corresponds to a specific immunological
+        prediction tool.
+
+        Supported evaluators include:
+
+        - **ToxinPred**:
+            Predicts peptide toxicity using machine learning models or
+            quantitative matrix methods.
+
+        - **AlgPred2**:
+            Predicts allergenicity of peptide sequences using machine
+            learning approaches.
+
+        - **IL4pred**:
+            Evaluates the ability of peptides to induce IL-4 cytokine
+            responses.
+
+        - **IL10pred**:
+            Predicts IL-10 inducing peptides using machine learning models.
+
+        - **IFNepitope**:
+            Predicts peptides capable of inducing interferon-gamma responses.
+
+        - **ToxinPred2**:
+            Updated toxicity prediction model using advanced machine learning
+            approaches.
+
+        Each evaluator may require specific parameters such as prediction
+        models, thresholds, or scoring methods. These parameters allow the
+        user to fine-tune prediction sensitivity and adapt the analysis to
+        different biological scenarios.
+
+        Evaluator Management
+        --------------------
+        - **Evaluator name (evaluatorIIITDName)**:
+            Optional identifier assigned to each configured evaluator.
+
+        - **Evaluators summary (inEvals)**:
+            Displays the list of evaluators that will be applied to the input
+            epitopes during protocol execution.
+
+        Multiple evaluators can be configured simultaneously, allowing the
+        protocol to perform comprehensive characterization of each epitope.
+
+        Workflow
+        --------
+        1. **Input preparation**
+           - The protocol retrieves peptide sequences from the input
+             `SetOfSequenceROIs`.
+
+        2. **Evaluator configuration**
+           - One or more evaluation tools are defined along with their
+             respective parameters.
+
+        3. **Evaluation execution**
+           - The IIITD evaluation framework is executed for each peptide
+             sequence using the configured evaluators.
+
+        4. **Score collection**
+           - Evaluation results are returned as numerical scores or
+             classification values for each peptide.
+
+        5. **Output generation**
+           - Evaluation scores are appended as attributes to each epitope
+             in the output dataset.
+
+        Outputs
+        -------
+        - **SetOfSequenceROIs**:
+            A set of epitopes enriched with evaluation results. Each epitope
+            may contain additional attributes such as:
+
+                • Toxicity predictions
+                • Allergenicity scores
+                • Cytokine induction potential
+                • Other immunological descriptors
+
+        These annotated epitopes can be used for downstream filtering,
+        ranking, or integration into vaccine design pipelines.
+
+        Interpretation
+        --------------
+        - Evaluation scores provide additional information about the
+          biological suitability of each epitope.
+        - Toxic peptides can be excluded to improve safety profiles.
+        - Cytokine-inducing predictions can help identify epitopes capable
+          of generating desired immune responses.
+
+        Practical Recommendations
+        -------------------------
+        - Apply this protocol after epitope prediction to enrich candidates
+          with additional biological annotations.
+        - Combine multiple evaluators to obtain a more comprehensive
+          characterization of candidate peptides.
+        - Use evaluation scores together with experimental or structural
+          data to guide final epitope selection.
+
+        Warnings
+        --------
+        - Computational evaluations are predictive and may contain
+          uncertainties; experimental validation is recommended.
+        - Different evaluation tools rely on different datasets and
+          machine learning models, which may produce varying results.
+
+        Final Perspective
+        -----------------
+        ProtIIITDEvaluations provides a unified framework for enriching
+        epitope candidates with immunological and safety-related predictions.
+        By integrating multiple evaluation tools into a single workflow,
+        the protocol facilitates systematic prioritization of peptides
+        for vaccine development and immunological research.
   """
   _label = 'IIITD epitope evaluations'
 
