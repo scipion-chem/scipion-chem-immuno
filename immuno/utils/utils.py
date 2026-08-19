@@ -99,7 +99,7 @@ def getFastaStrs(seqDic, maxChunk=1):
   seqLists = divide_chunks(seqList, maxChunk)
   return buildSeqFasta(seqLists)
 
-def getFastaFiles(seqDic, evalSoft, outDir, maxChunk=1):
+def getFastaFiles(seqDic, evalSoft, outDir='/tmp', maxChunk=1):
   '''Write a series of fasta files with maxChunk number of sequences from a set of sequences'''
   fastaStrs = getFastaStrs(seqDic, maxChunk)
   faFiles = []
