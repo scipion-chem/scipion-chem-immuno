@@ -27,17 +27,18 @@
 This package contains protocols for creating and using IIITD Raghava software
 """
 
-import multiprocessing
+import multiprocessing, shutil, subprocess
 
 from scipion.install.funcs import InstallHelper
 
-from pwchem import Plugin as pwchemPlugin
+from pwchem.utils import insistentRun, getReplaceCommand
 
 from .utils import *
 from .constants import *
 
 # Pluging variables
-_logo = 'iiitd_logo.png'
+_logo = 'immuno_logo.png'
+
 
 class Plugin(pwchemPlugin):
 	"""
@@ -46,13 +47,18 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def _defineVariables(cls):
 		cls._defineVar(IIITD_DIC['activation'], cls.getEnvActivationCommand(IIITD_DIC))
-		cls._defineVar(IIITD_DIC['browser'], 'Chrome')
-		cls._defineVar(IIITD_DIC['browserPath'], '/usr/bin/google-chrome')
+		cls._defineVar(IIITDW_DIC['activation'], cls.getEnvActivationCommand(IIITDW_DIC))
+		cls._defineVar(IIITDW_DIC['browser'], 'Chrome')
+		cls._defineVar(IIITDW_DIC['browserPath'], '/usr/bin/google-chrome')
+
+		cls._defineEmVar(VAXIGNML_DIC['home'], VAXIGNML_DIC['name'] + '-' + VAXIGNML_DIC['version'])
 
 	@classmethod
 	def defineBinaries(cls, env, default=True):
 		"""This function defines the binaries for each package."""
 		cls.addIIITDPackage(env)
+		cls.addIIITDWPackage(env)
+		cls.addIL6PredPackage(env)
 		cls.addVaxignMLPackage(env)
 
 	@classmethod
@@ -60,19 +66,51 @@ class Plugin(pwchemPlugin):
 		installer = InstallHelper(IIITD_DIC['name'], packageHome=cls.getVar(IIITD_DIC['home']),
 															packageVersion=IIITD_DIC['version'])
 		# Installing IIITD package
+		installer.getCondaEnvCommand(pythonVersion=IIITD_DIC['python'], requirementsFile=False) \
+			.addCommand(f'{cls.getEnvActivationCommand(IIITD_DIC)} && pip install {" ".join(IIITD_PACKAGES)}',
+									'PIP_MODS_INSTALLED') \
+			.addCommand(f'{cls.getFixScripts(IIITD_DIC, IIITD_FIXES)}', 'SCRIPS_FIXED') \
+			.addPackage(env, ['conda', 'pip'], default=default)
+
+	@classmethod
+	def addIIITDWPackage(cls, env, default=True):
+		installer = InstallHelper(IIITDW_DIC['name'], packageHome=cls.getVar(IIITDW_DIC['home']),
+															packageVersion=IIITDW_DIC['version'])
+		# Installing IIITD package
 		installer.getCondaEnvCommand(pythonVersion='3.10', requirementsFile=False) \
 			.addCondaPackages(['selenium'], channel='conda-forge') \
-			.addPackage(env, ['git', 'conda'], default=default)
+			.addPackage(env, ['conda'], default=default)
+
+
+	@classmethod
+	def addIL6PredPackage(cls, env, default=True):
+		installer = InstallHelper(IL6PRED_DIC['name'], packageHome=cls.getVar(IL6PRED_DIC['home']),
+															packageVersion=IL6PRED_DIC['version'])
+		# Installing IL6PRED package
+		installer.getCondaEnvCommand(pythonVersion=IL6PRED_DIC['python'], requirementsFile=False) \
+			.addCondaPackages(['tqdm'], channel='conda-forge') \
+			.addCommand(f'{cls.getEnvActivationCommand(IL6PRED_DIC)} && pip install il6pred', 'IL6PRED_PIP_INSTALLED') \
+			.addCommand(f'{cls.getFixScripts(IL6PRED_DIC, IL6_FIXES)}', 'SCRIPS_FIXED') \
+			.addPackage(env, ['conda', 'pip'], default=default)
 
 	@classmethod
 	def addVaxignMLPackage(cls, env, default=True):
 		# Installing Vaxign-ML package
+		# VAXIGN_INSTALLED = '%s_installed' % VAXIGNML_DIC['name']
+		# vaxignML_commands = f'docker images -q e4ong1031/vaxign-ml > {VAXIGN_INSTALLED} && '
+		# vaxignML_commands += f'find ./ -maxdepth 1 -size 0 -name {VAXIGN_INSTALLED} -delete'
+		#
+		# vaxignML_commands = [(vaxignML_commands, VAXIGN_INSTALLED)]
+		# env.addPackage(VAXIGNML_DIC['name'], version=VAXIGNML_DIC['version'],
+		# 							 tar='void.tgz', commands=vaxignML_commands, default=True)
+		
+		
+		correctInstall = 'VAXIGN_INSTALLED'
 		installer = InstallHelper(VAXIGNML_DIC['name'], packageHome=cls.getVar(VAXIGNML_DIC['home']),
 															packageVersion=VAXIGNML_DIC['version'])
-		installer.addCommand('docker pull e4ong1031/vaxign-ml:latest'). \
-			addCommand('wget https://raw.githubusercontent.com/VIOLINet/Vaxign-ML-docker/master/VaxignML.sh'). \
-			addCommand('chmod a+x VaxignML.sh').addCommand("sed -i 's/sudo//g' VaxignML.sh", 'VAXIGN_INSTALLED').\
-			addPackage(env, dependencies=['chmod', 'wget', 'docker'], default=default)
+		# Checks if the docker image exists, fails if not found
+		installer.addCommand('docker pull e4ong1031/vaxign-ml:latest', correctInstall). \
+			addPackage(env, dependencies=['docker'], default=default)
 
 
 	# ---------------------------------- Protocol functions-----------------------
@@ -108,30 +146,88 @@ class Plugin(pwchemPlugin):
 		return epiDics
 
 	@classmethod
-	def performEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, verbose=True):
-		'''Generalize caller to the evaluation functions.
+	def performEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, outDir='/tmp', verbose=True):
+			sDics, sWebDics = {k: v for k, v in evalDics.items() if v['software'] in STAND_SOFT}, \
+												{k: v for k, v in evalDics.items() if v['software'] not in STAND_SOFT}
+
+			epiDics = {}
+			if len(sDics) > 0:
+				epiDics.update(cls.performStandEvaluations(sequences, sDics, outDir))
+			if len(sWebDics) > 0:
+				epiDics.update(cls.performWebEvaluations(sequences, sWebDics, jobs, browserData, verbose))
+			return epiDics
+
+	@classmethod
+	def performStandEvaluations(cls, sequences, evalDics, outDir):
+		'''Generalize caller to the standalone evaluation functions.
+    - sequences: dict with sequences in the form: {seqId: sequence}
+    - evalDics: dictionary as {evalKey: {parameterName: parameterValue}}
+    - jobs: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
+
+		resultsDic, fKeys, outDic, sevalDics = {}, {}, {}, {}
+		for evalKey, evalDic in evalDics.items():
+			softName = evalDic['software']
+			fKeys[(evalKey, softName)] = list(sequences.keys())
+			smallEvalDic = evalDic.copy()
+			del smallEvalDic['software']
+			sevalDics[(evalKey, softName)] = smallEvalDic
+			outDic[(evalKey, softName)] = os.path.join(outDir, f'{evalKey}_output.csv')
+			resultsDic[(evalKey, softName)] = callIIITD(sequences, softName, smallEvalDic, outDic[(evalKey, softName)])
+
+		# Check Subprocesses status and restart if failed
+		pDic = {(evalKey, softName): None for (evalKey, softName) in resultsDic}
+		while None in pDic.values():
+			time.sleep(1)
+			pDic = {}
+			for (evalKey, softName), p in resultsDic.items():
+				pDic[(evalKey, softName)] = p.poll()
+				if pDic[(evalKey, softName)] == 1:
+					resultsDic[(evalKey, softName)] = callIIITD(sequences, softName,
+																											sevalDics[(evalKey, softName)], outDic[(evalKey, softName)])
+
+		# Parse output results
+		epiDics = {}
+		for (evalKey, softName), res in resultsDic.items():
+			fScores = parseIIITD(outDic[(evalKey, softName)], softName)
+			allScores, i = [], 0
+			for seqId in sequences:
+				if seqId in fKeys[(evalKey, softName)]:
+					allScores.append(fScores[i])
+					i += 1
+				else:
+					allScores.append(0)
+
+			epiDics[(evalKey, softName)] = allScores
+		return epiDics
+
+	@classmethod
+	def performWebEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, verbose=True):
+		'''Generalize caller to the web evaluation functions.
     - sequences: dict with sequences in the form: {seqId: sequence}
     - evalDics: dictionary as {evalKey: {parameterName: parameterValue}}
     - jobs: int, number of jobs for parallelization
     Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
     '''
 		funcDic = {
-			'ToxinPred': callToxinPred, 'AlgPred2': callAlgPred2, 'ToxinPred2': callToxinPred2,
-			'IL4pred': callIL4pred, 'IL10pred': callIL10pred, 'IFNepitope': callIFNepitope,
+			TOXINPRED: callToxinPred, ALGPRED2: callAlgPred2, TOXINPRED2: callToxinPred2,
+			IL4PRED: callIL4pred, IL10PRED: callIL10pred, IFNEPITOPE: callIFNepitope,
 		}
 
 		# Create a pool of worker processes
 		nJobs = len(evalDics) if len(evalDics) < jobs else jobs
 		pool = multiprocessing.Pool(processes=nJobs)
 
-		resultsDic = {}
+		resultsDic, fKeys = {}, {}
 		for evalKey, evalDic in evalDics.items():
 			softName = evalDic['software']
+			fKeys[(evalKey, softName)] = list(sequences.keys())
 			smallEvalDic = evalDic.copy()
 			del smallEvalDic['software']
 			if softName in funcDic:
 				resultsDic[(evalKey, softName)] = pool.apply_async(funcDic[softName],
-																													 args=(sequences, smallEvalDic, browserData))
+																													 args=(sequences, browserData, smallEvalDic))
 
 		if verbose:
 			reportPoolStatus(resultsDic)
@@ -141,11 +237,72 @@ class Plugin(pwchemPlugin):
 
 		epiDics = {}
 		for (evalKey, softName), res in resultsDic.items():
-			epiDics[(evalKey, softName)] = res.get()['Score']
+			fScores = res.get()['Score'] if 'Score' in res.get() else []
+			allScores, i = [], 0
+			for seqId in sequences:
+				if seqId in fKeys[(evalKey, softName)]:
+					allScores.append(fScores[i])
+					i += 1
+				else:
+					allScores.append(0)
 
+			epiDics[(evalKey, softName)] = allScores
 		return epiDics
+
+	@classmethod
+	def runVaxignML(cls, protocol, kwargs, cwd=None):
+		""" Run vaxignML command from a given protocol.
+		kwargs must contain:
+		{"i": inputFasta, "o": outputDir, "-t": organism}
+		other optional parameters are:
+		{"s": modelPath, "p": numberProcessors}
+		"""
+		protId = protocol.getObjId()
+		tmpDir = f'/tmp/VaxignML_{protId}'
+		iFile, oDir = kwargs['i'], kwargs['o']
+		kwargs['o'] = tmpDir
+
+		program = f"docker run --rm -v {iFile}:{iFile} -v {tmpDir}:{tmpDir} " \
+							f"-v {tmpDir}/_FEATURE/PSORTB:/tmp/results " \
+							"e4ong1031/vaxign-ml:latest python3.6 VaxignML.py "
+		args = [f'-{k} {v}' for k,v in kwargs.items()]
+		args = ' '.join(args)
+
+		insistentRun(protocol, program, args, cwd=cwd, popen=True, stdout=subprocess.DEVNULL)
+		# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
+
+		# Copying results dir with no-root user
+		shutil.copytree(tmpDir, oDir)
+
+		# Remove root results dir
+		if os.path.exists(tmpDir):
+			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
+			args = f'/mnt/{tmpDir}'
+			insistentRun(protocol, program, args, cwd=cwd, popen=True)
+			# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
+
 
 	# ---------------------------------- Utils functions-----------------------
 	@classmethod
 	def getBrowserData(cls):
-		return {'name': cls.getVar(IIITD_DIC['browser']), 'path': cls.getVar(IIITD_DIC['browserPath'])}
+		return {'name': cls.getVar(IIITDW_DIC['browser']), 'path': cls.getVar(IIITDW_DIC['browserPath'])}
+
+	@classmethod
+	def getEnvScriptsPath(cls, envDic, software, scriptName):
+		return pwchemPlugin.getEnvPath(envDic, f'lib/python{envDic["python"]}/site-packages/{software}'
+																					 f'/python_scripts/{scriptName}.py')
+
+	@classmethod
+	def getFixScripts(cls, envDic, fixDic):
+		cmds = []
+		for software, repDic in fixDic.items():
+			for fileName, repList in repDic.items():
+				scriptFile = cls.getEnvScriptsPath(envDic, software.lower(), fileName)
+				for repPair in repList:
+					cmds.append(getReplaceCommand(scriptFile, repPair[0], repPair[1]))
+		return ' && '.join(cmds)
+
+
+
+
+

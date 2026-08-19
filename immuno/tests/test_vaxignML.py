@@ -26,49 +26,40 @@
 
 from pyworkflow.tests import setupTestProject, DataSet, BaseTest
 
-from pwem.protocols import ProtImportSequence
-
+from pwchem.protocols import ProtChemImportSetOfSequences
 from pwchem.utils import assertHandle
 
-from ..protocols import ProtIIITDEpitopeSelection
-from ..constants import SELSUM
+from ..protocols import ProtVaxignMLEpitopeEvaluation
 
-class TestIIITDSelection(BaseTest):
-	NAME = 'USER_SEQ'
-	DESCRIPTION = 'User description'
-	AMINOACIDSSEQ1 = 'MVLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHG'
-
+class TestVaxignML(BaseTest):
 	@classmethod
 	def setUpClass(cls):
-		super().setUpClass()
-		cls.ds = DataSet.getDataSet('model_building_tutorial')
 		setupTestProject(cls)
-
-		cls._runImportSeq()
-		cls._waitOutput(cls.protImportSeq, 'outputSequences', sleepTime=5)
+		cls.ds = DataSet.getDataSet('model_building_tutorial')
 
 	@classmethod
-	def _runImportSeq(cls):
-		kwargs = {'inputSequenceName': cls.NAME,
-							'inputSequenceDescription': cls.DESCRIPTION,
-							'inputRawSequence': cls.AMINOACIDSSEQ1
-							}
+	def _runImportSeqs(cls):
+		protImportSeqs = cls.newProtocol(
+			ProtChemImportSetOfSequences,
+			multiple=True,
+			filesPath=cls.ds.getFile('Sequences/'), filesPattern='*_A_mutated.fasta')
+		cls.launchProtocol(protImportSeqs)
+		cls.protImportSeqs = protImportSeqs
+		return protImportSeqs
 
-		cls.protImportSeq = cls.newProtocol(
-			ProtImportSequence, **kwargs)
-		cls.proj.launchProtocol(cls.protImportSeq, wait=False)
+	def _runVaxignML(self, protSeqs):
+		protSel = self.newProtocol(ProtVaxignMLEpitopeEvaluation,
+															 inputSource=0)
 
-	def _runIIITDSelection(self):
-		protSel = self.newProtocol(ProtIIITDEpitopeSelection,
-																		inSels=SELSUM)
-
-		protSel.inputSequence.set(self.protImportSeq)
-		protSel.inputSequence.setExtended('outputSequence')
+		protSel.inputSequences.set(protSeqs)
+		protSel.inputSequences.setExtended('outputSequences')
 
 		self.proj.launchProtocol(protSel, wait=False)
 		return protSel
 
 	def test(self):
-		protSel = self._runIIITDSelection()
-		self._waitOutput(protSel, 'outputROIs', sleepTime=10)
-		assertHandle(self.assertIsNotNone, getattr(protSel, 'outputROIs', None))
+		protSeqs = self._runImportSeqs()
+		self._waitOutput(protSeqs, 'outputSequences', sleepTime=10)
+		protVax = self._runVaxignML(protSeqs)
+		self._waitOutput(protVax, 'outputSequences', sleepTime=10)
+		assertHandle(self.assertIsNotNone, getattr(protVax, 'outputSequences', None))

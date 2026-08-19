@@ -32,11 +32,11 @@ from pyworkflow.protocol import params
 from pwchem.objects import Sequence, SequenceROI, SetOfSequenceROIs
 
 from immuno import Plugin as iiitdPlugin
-from ..constants import SEL_PARAM_MAP
+from ..constants import SEL_PARAM_MAP, SEL_PARAM_VALUE_MAP
 
-class ProtIIITDEpitopeSelection(EMProtocol):
-  """Run epitope selections on a set of protein sequences (SetOfSequences)"""
-  _label = 'IIITD epitope selection'
+class ProtIIITDEpitopePrediction(EMProtocol):
+  """Run epitope prediction on a set of protein sequences (SetOfSequences)"""
+  _label = 'IIITD epitope prediction'
 
   _selectorOptions = ['ABCpred', 'LBtope']
   _lbModels = ['LBtope_Fixed', 'LBtope_Fixed_non_redundant',
@@ -77,8 +77,8 @@ class ProtIIITDEpitopeSelection(EMProtocol):
 
     aGroup.addParam('lbModel', params.EnumParam, choices=self._lbModels, label='LBtope model to use: ', default=2,
                     condition='chooseSelector==1', help='LBtope model to use for epitope prediction')
-    aGroup.addParam('lbThres', params.EnumParam, choices=["20", "40", "60", "80"], condition='chooseSelector==1', 
-                    label='LBtope probability threshold: ', default=2, expertLevel=params.LEVEL_ADVANCED,
+    aGroup.addParam('lbThres', params.IntParam, label='LBtope probability threshold: ',
+                    condition='chooseSelector==1', default=60, expertLevel=params.LEVEL_ADVANCED,
                     help='Probability threshold to consider a positive predicted epitope.')
     aGroup.addParam('lbLength', params.IntParam, label='LBtope epitope lenght: ', default=15,
                     condition='chooseSelector==1 and lbModel>1',
@@ -111,16 +111,18 @@ class ProtIIITDEpitopeSelection(EMProtocol):
     for (selKey, softName), epiDic in epiDics.items():
       seqEpDic = epiDic[f'seq1']
       if seqEpDic:
-        for epSeq, epIdx, epSc in zip(seqEpDic['Sequence'], seqEpDic['Position'], seqEpDic['Score']):
-          idxs = [int(epIdx), int(epIdx) + len(epSeq)]
-          roiName = '{}_ROI_{}-{}'.format(selKey, *idxs)
-          roiSeq = Sequence(sequence=epSeq, name=roiName, id=roiName,
-                            description=f'{selKey} epitope')
-          seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
-          seqROI._epitopeType = params.String('B')
-          seqROI._source = params.String(softName)
-          setattr(seqROI, softName, params.Float(epSc))
-          outROIs.append(seqROI)
+        for i, epSeq in enumerate(seqEpDic['Sequence']):
+          epIdx, epSc = seqEpDic['Position'][i], seqEpDic['Score'][i]
+          if softName != 'LBtope' or seqEpDic['Probability'][i] >= float(sDics[selKey]['val']):
+            idxs = [int(epIdx), int(epIdx) + len(epSeq)]
+            roiName = '{}_ROI_{}-{}'.format(selKey, *idxs)
+            roiSeq = Sequence(sequence=epSeq, name=roiName, id=roiName,
+                              description=f'{selKey} epitope')
+            seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
+            seqROI._epitopeType = params.String('B')
+            seqROI._source = params.String(softName)
+            setattr(seqROI, '_sourceScore', params.Float(epSc))
+            outROIs.append(seqROI)
 
     if len(outROIs) > 0:
       self._defineOutputs(**{f'outputROIs': outROIs})
@@ -165,6 +167,8 @@ class ProtIIITDEpitopeSelection(EMProtocol):
       for paramName, paramValue in curSDic.items():
         if paramName in SEL_PARAM_MAP:
           paramName = SEL_PARAM_MAP[paramName]
+        if paramValue in SEL_PARAM_VALUE_MAP:
+          paramValue = SEL_PARAM_VALUE_MAP[paramValue]
         wsDic[sName][paramName] = paramValue
     return wsDic
 
