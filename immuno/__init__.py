@@ -31,22 +31,13 @@ import multiprocessing, shutil, subprocess
 
 from scipion.install.funcs import InstallHelper
 
-from pwchem import Plugin as pwchemPlugin
-from pwchem.utils import insistentRun
+from pwchem.utils import insistentRun, getReplaceCommand
 
 from .utils import *
 from .constants import *
 
 # Pluging variables
 _logo = 'immuno_logo.png'
-
-def filterSequences(seqDic, softName):
-	fSeqs = seqDic.copy()
-	if softName in SEQ_LIMITS:
-		for seqId, seq in seqDic.items():
-			if len(seq) > SEQ_LIMITS[softName]:
-				del fSeqs[seqId]
-	return fSeqs
 
 
 class Plugin(pwchemPlugin):
@@ -56,8 +47,9 @@ class Plugin(pwchemPlugin):
 	@classmethod
 	def _defineVariables(cls):
 		cls._defineVar(IIITD_DIC['activation'], cls.getEnvActivationCommand(IIITD_DIC))
-		cls._defineVar(IIITD_DIC['browser'], 'Chrome')
-		cls._defineVar(IIITD_DIC['browserPath'], '/usr/bin/google-chrome')
+		cls._defineVar(IIITDW_DIC['activation'], cls.getEnvActivationCommand(IIITDW_DIC))
+		cls._defineVar(IIITDW_DIC['browser'], 'Chrome')
+		cls._defineVar(IIITDW_DIC['browserPath'], '/usr/bin/google-chrome')
 
 		cls._defineEmVar(VAXIGNML_DIC['home'], VAXIGNML_DIC['name'] + '-' + VAXIGNML_DIC['version'])
 
@@ -65,6 +57,8 @@ class Plugin(pwchemPlugin):
 	def defineBinaries(cls, env, default=True):
 		"""This function defines the binaries for each package."""
 		cls.addIIITDPackage(env)
+		cls.addIIITDWPackage(env)
+		cls.addIL6PredPackage(env)
 		cls.addVaxignMLPackage(env)
 
 	@classmethod
@@ -72,9 +66,32 @@ class Plugin(pwchemPlugin):
 		installer = InstallHelper(IIITD_DIC['name'], packageHome=cls.getVar(IIITD_DIC['home']),
 															packageVersion=IIITD_DIC['version'])
 		# Installing IIITD package
+		installer.getCondaEnvCommand(pythonVersion=IIITD_DIC['python'], requirementsFile=False) \
+			.addCommand(f'{cls.getEnvActivationCommand(IIITD_DIC)} && pip install {" ".join(IIITD_PACKAGES)}',
+									'PIP_MODS_INSTALLED') \
+			.addCommand(f'{cls.getFixScripts(IIITD_DIC, IIITD_FIXES)}', 'SCRIPS_FIXED') \
+			.addPackage(env, ['conda', 'pip'], default=default)
+
+	@classmethod
+	def addIIITDWPackage(cls, env, default=True):
+		installer = InstallHelper(IIITDW_DIC['name'], packageHome=cls.getVar(IIITDW_DIC['home']),
+															packageVersion=IIITDW_DIC['version'])
+		# Installing IIITD package
 		installer.getCondaEnvCommand(pythonVersion='3.10', requirementsFile=False) \
 			.addCondaPackages(['selenium'], channel='conda-forge') \
-			.addPackage(env, ['git', 'conda'], default=default)
+			.addPackage(env, ['conda'], default=default)
+
+
+	@classmethod
+	def addIL6PredPackage(cls, env, default=True):
+		installer = InstallHelper(IL6PRED_DIC['name'], packageHome=cls.getVar(IL6PRED_DIC['home']),
+															packageVersion=IL6PRED_DIC['version'])
+		# Installing IL6PRED package
+		installer.getCondaEnvCommand(pythonVersion=IL6PRED_DIC['python'], requirementsFile=False) \
+			.addCondaPackages(['tqdm'], channel='conda-forge') \
+			.addCommand(f'{cls.getEnvActivationCommand(IL6PRED_DIC)} && pip install il6pred', 'IL6PRED_PIP_INSTALLED') \
+			.addCommand(f'{cls.getFixScripts(IL6PRED_DIC, IL6_FIXES)}', 'SCRIPS_FIXED') \
+			.addPackage(env, ['conda', 'pip'], default=default)
 
 	@classmethod
 	def addVaxignMLPackage(cls, env, default=True):
@@ -129,8 +146,65 @@ class Plugin(pwchemPlugin):
 		return epiDics
 
 	@classmethod
-	def performEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, verbose=True):
-		'''Generalize caller to the evaluation functions.
+	def performEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, outDir='/tmp', verbose=True):
+			sDics, sWebDics = {k: v for k, v in evalDics.items() if v['software'] in STAND_SOFT}, \
+												{k: v for k, v in evalDics.items() if v['software'] not in STAND_SOFT}
+
+			epiDics = {}
+			if len(sDics) > 0:
+				epiDics.update(cls.performStandEvaluations(sequences, sDics, outDir))
+			if len(sWebDics) > 0:
+				epiDics.update(cls.performWebEvaluations(sequences, sWebDics, jobs, browserData, verbose))
+			return epiDics
+
+	@classmethod
+	def performStandEvaluations(cls, sequences, evalDics, outDir):
+		'''Generalize caller to the standalone evaluation functions.
+    - sequences: dict with sequences in the form: {seqId: sequence}
+    - evalDics: dictionary as {evalKey: {parameterName: parameterValue}}
+    - jobs: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
+
+		resultsDic, fKeys, outDic, sevalDics = {}, {}, {}, {}
+		for evalKey, evalDic in evalDics.items():
+			softName = evalDic['software']
+			fKeys[(evalKey, softName)] = list(sequences.keys())
+			smallEvalDic = evalDic.copy()
+			del smallEvalDic['software']
+			sevalDics[(evalKey, softName)] = smallEvalDic
+			outDic[(evalKey, softName)] = os.path.join(outDir, f'{evalKey}_output.csv')
+			resultsDic[(evalKey, softName)] = callIIITD(sequences, softName, smallEvalDic, outDic[(evalKey, softName)])
+
+		# Check Subprocesses status and restart if failed
+		pDic = {(evalKey, softName): None for (evalKey, softName) in resultsDic}
+		while None in pDic.values():
+			time.sleep(1)
+			pDic = {}
+			for (evalKey, softName), p in resultsDic.items():
+				pDic[(evalKey, softName)] = p.poll()
+				if pDic[(evalKey, softName)] == 1:
+					resultsDic[(evalKey, softName)] = callIIITD(sequences, softName,
+																											sevalDics[(evalKey, softName)], outDic[(evalKey, softName)])
+
+		# Parse output results
+		epiDics = {}
+		for (evalKey, softName), res in resultsDic.items():
+			fScores = parseIIITD(outDic[(evalKey, softName)], softName)
+			allScores, i = [], 0
+			for seqId in sequences:
+				if seqId in fKeys[(evalKey, softName)]:
+					allScores.append(fScores[i])
+					i += 1
+				else:
+					allScores.append(0)
+
+			epiDics[(evalKey, softName)] = allScores
+		return epiDics
+
+	@classmethod
+	def performWebEvaluations(cls, sequences, evalDics, jobs=1, browserData={}, verbose=True):
+		'''Generalize caller to the web evaluation functions.
     - sequences: dict with sequences in the form: {seqId: sequence}
     - evalDics: dictionary as {evalKey: {parameterName: parameterValue}}
     - jobs: int, number of jobs for parallelization
@@ -148,13 +222,12 @@ class Plugin(pwchemPlugin):
 		resultsDic, fKeys = {}, {}
 		for evalKey, evalDic in evalDics.items():
 			softName = evalDic['software']
-			fSeqs = filterSequences(sequences, softName)
-			fKeys[(evalKey, softName)] = list(fSeqs.keys())
+			fKeys[(evalKey, softName)] = list(sequences.keys())
 			smallEvalDic = evalDic.copy()
 			del smallEvalDic['software']
 			if softName in funcDic:
 				resultsDic[(evalKey, softName)] = pool.apply_async(funcDic[softName],
-																													 args=(fSeqs, smallEvalDic, browserData))
+																													 args=(sequences, browserData, smallEvalDic))
 
 		if verbose:
 			reportPoolStatus(resultsDic)
@@ -195,7 +268,8 @@ class Plugin(pwchemPlugin):
 		args = [f'-{k} {v}' for k,v in kwargs.items()]
 		args = ' '.join(args)
 
-		subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
+		insistentRun(protocol, program, args, cwd=cwd, popen=True, stdout=subprocess.DEVNULL)
+		# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
 
 		# Copying results dir with no-root user
 		shutil.copytree(tmpDir, oDir)
@@ -204,11 +278,31 @@ class Plugin(pwchemPlugin):
 		if os.path.exists(tmpDir):
 			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
 			args = f'/mnt/{tmpDir}'
-			insistentRun(protocol, program, args, cwd=cwd)
+			insistentRun(protocol, program, args, cwd=cwd, popen=True)
 			# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
 
 
 	# ---------------------------------- Utils functions-----------------------
 	@classmethod
 	def getBrowserData(cls):
-		return {'name': cls.getVar(IIITD_DIC['browser']), 'path': cls.getVar(IIITD_DIC['browserPath'])}
+		return {'name': cls.getVar(IIITDW_DIC['browser']), 'path': cls.getVar(IIITDW_DIC['browserPath'])}
+
+	@classmethod
+	def getEnvScriptsPath(cls, envDic, software, scriptName):
+		return pwchemPlugin.getEnvPath(envDic, f'lib/python{envDic["python"]}/site-packages/{software}'
+																					 f'/python_scripts/{scriptName}.py')
+
+	@classmethod
+	def getFixScripts(cls, envDic, fixDic):
+		cmds = []
+		for software, repDic in fixDic.items():
+			for fileName, repList in repDic.items():
+				scriptFile = cls.getEnvScriptsPath(envDic, software.lower(), fileName)
+				for repPair in repList:
+					cmds.append(getReplaceCommand(scriptFile, repPair[0], repPair[1]))
+		return ' && '.join(cmds)
+
+
+
+
+

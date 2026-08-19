@@ -24,8 +24,10 @@
 # *
 # **************************************************************************
 
-import time, os, requests
+import time, os, requests, subprocess as sp
 from Bio import SeqIO
+
+from pwchem import Plugin as pwchemPlugin
 
 from ..constants import *
 
@@ -97,12 +99,12 @@ def getFastaStrs(seqDic, maxChunk=1):
   seqLists = divide_chunks(seqList, maxChunk)
   return buildSeqFasta(seqLists)
 
-def getFastaFiles(seqDic, evalSoft, maxChunk=1):
+def getFastaFiles(seqDic, evalSoft, outDir='/tmp', maxChunk=1):
   '''Write a series of fasta files with maxChunk number of sequences from a set of sequences'''
   fastaStrs = getFastaStrs(seqDic, maxChunk)
   faFiles = []
   for i, fStr in enumerate(fastaStrs):
-    faFiles.append(f'/tmp/{evalSoft}_input_{i}.fa')
+    faFiles.append(os.path.join(outDir, f'{evalSoft}_input_{i}.fa'))
     with open(faFiles[-1], 'w') as f:
       f.write(fStr)
   return faFiles
@@ -253,6 +255,37 @@ def filterSequences(inSeqDic, minLen=0, maxLen=100000):
       passDic[seqId] = seq
 
   return passDic
+
+########## STANDALONE CALLS ###########
+
+def callIIITD(seqDic, software, evalDic, outFile):
+  outDir = os.path.dirname(outFile)
+  faFile = getFastaFiles(seqDic, software, outDir, maxChunk=100)[0]
+  args = f' -i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
+  envDic = IL6PRED_DIC if software.lower() == 'il6pred' else IIITD_DIC
+
+  if os.path.exists(outFile):
+    os.remove(outFile)
+  fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {software.lower()} '
+  return sp.Popen(fullProgram + args, shell=True)
+
+def getArgs(evalDic):
+  mapKeysDic = {'Thval': '-t', 'Window': '-w', 'Method': '-m', 'Host': '-s'}
+  mapValsDic = {'Machine Learning (ML)': 1, 'Hybrid (MERCI + ML)': 2,
+                'Human': 1, 'Mouse': 2,
+                "AAC based RF": 1, "Hybrid (RF+BLAST+MERCI)": 2}
+
+  curEDic = {}
+  for pName, pVal in evalDic.items():
+    for mapShort, mapVal in mapKeysDic.items():
+      if mapShort in pName:
+        curEDic[mapVal] = pVal
+
+        if pVal in mapValsDic:
+          curEDic[mapVal] = mapValsDic[pVal]
+
+  return ' '.join(f'{k} {v}' for k, v in curEDic.items())
+
 
 ########## REQUESTS ##########
 
@@ -627,6 +660,18 @@ def parseAlgPred2(driver):
       resDic[labels[i]].append(cell.text)
   outDic = renameScore(resDic)
   return outDic
+
+def parseIIITD(outFile, software):
+  scoreCol = {'toxinpred3': 2, 'algpred2': 2, 'ifnepitope2': 4, 'il13pred': 3, 'il5pred': 4,
+              'il6pred': 3, 'toxinpred2': 2}
+  sCol = scoreCol[software.lower()]
+
+  scores = []
+  with open(outFile) as f:
+    f.readline()
+    for line in f:
+      scores.append(float(line.split(',')[sCol]))
+  return scores
 
 def renameScore(outDic, scoreKey=''):
   '''Rename the score key in a dict with just "Score"'''
