@@ -27,4 +27,9 @@
 from .protocol_epitope_evaluations import ProtIIITDEvaluations
 from .protocol_epitope_prediction import ProtIIITDEpitopePrediction
 from .protocol_vaxignML_prediction import ProtVaxignMLEpitopeEvaluation
+from .protocol_scannet import ProtScanNetPrediction
+from .protocol_discotope import ProtDiscoTopePrediction
+from .protocol_tmbed_predict import ProtTMbedPredict
+from .protocol_signalp import ProtSignalPPrediction
+from .protocol_epitope_construct import ProtEpitopeConstructAssembly
 
