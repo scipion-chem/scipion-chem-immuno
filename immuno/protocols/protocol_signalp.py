@@ -30,6 +30,7 @@ protein/construct with a local SignalP-6.0 installation.
 
 from pathlib import Path
 
+import pandas as pd
 from pwchem.objects import SetOfSequenceROIs
 from pwem.protocols import EMProtocol
 from pyworkflow.object import Float, String
@@ -143,7 +144,7 @@ class ProtSignalPPrediction(EMProtocol):
             roi._signalpPrediction = String(row.signalp_prediction)
             roi._signalpProbOther = Float(row.signalp_prob_other)
             roi._signalpProbSp = Float(row.signalp_prob_sp)
-            roi._signalpCsPosition = String(str(row.signalp_cs_position) if row.signalp_cs_position == row.signalp_cs_position else '')
+            roi._signalpCsPosition = String(str(row.signalp_cs_position) if pd.notna(row.signalp_cs_position) else '')
             outROIs.append(roi)
 
         if len(outROIs) > 0:
