@@ -35,7 +35,7 @@ def getAttr(roi, name: str, default: Any = None) -> Any:
     return attr.get() if attr is not None else default
 
 
-def _scoreNote(roi, fields: List[str]) -> str:
+def scoreNote(roi, fields: List[str]) -> str:
     parts = []
     for field in fields:
         value = getAttr(roi, field, None)
@@ -45,15 +45,15 @@ def _scoreNote(roi, fields: List[str]) -> str:
 
 
 def scoreNoteBcell(roi) -> str:
-    return _scoreNote(roi, ['_meanScore', '_maxScore', '_algpredVerdict'])
+    return scoreNote(roi, ['_meanScore', '_maxScore', '_algpredVerdict'])
 
 
 def scoreNoteHtl(roi) -> str:
-    return _scoreNote(roi, ['_nPromiscuousAlleles', '_nAllelesEvaluated', '_minRankEl'])
+    return scoreNote(roi, ['_nPromiscuousAlleles', '_nAllelesEvaluated', '_minRankEl'])
 
 
 def scoreNoteCtl(roi) -> str:
-    return _scoreNote(roi, ['_nPromiscuousAlleles', '_nAllelesEvaluated', '_minRankEl',
+    return scoreNote(roi, ['_nPromiscuousAlleles', '_nAllelesEvaluated', '_minRankEl',
                              '_netcleaveCTermMatch', '_netcleaveCTermScore'])
 
 
@@ -104,7 +104,7 @@ def extractGlycoRegions(bcellRois: List) -> List[Tuple[str, int, int]]:
     return regions
 
 
-def _overlapsGlycoRegion(roi, glycoRegions: List[Tuple[str, int, int]]) -> bool:
+def overlapsGlycoRegion(roi, glycoRegions: List[Tuple[str, int, int]]) -> bool:
     """Whether ``roi``'s [start, end] range overlaps any glycosylated region."""
     if not glycoRegions:
         return False
@@ -116,7 +116,7 @@ def _overlapsGlycoRegion(roi, glycoRegions: List[Tuple[str, int, int]]) -> bool:
     return False
 
 
-def _dedupeByCore(rois: List, sortKeyFn) -> List:
+def dedupeByCore(rois: List, sortKeyFn) -> List:
     """Collapse ROIs sharing the same '_core9aa' (same MHC-binding core evaluated in
     neighbouring windows is the same prediction, not distinct epitopes), keeping the
     best-ranked one per ``sortKeyFn`` (ascending)."""
@@ -134,7 +134,7 @@ def _dedupeByCore(rois: List, sortKeyFn) -> List:
 
 def selectHtlCandidates(rois: List, glycoRegions: List[Tuple[str, int, int]], topN: int) -> List:
     """Exclude glycosylated windows, dedupe by core, rank by promiscuity then %Rank, top-N."""
-    filtered = [r for r in rois if not _overlapsGlycoRegion(r, glycoRegions)]
+    filtered = [r for r in rois if not overlapsGlycoRegion(r, glycoRegions)]
     if not filtered:
         return filtered
 
@@ -143,14 +143,14 @@ def selectHtlCandidates(rois: List, glycoRegions: List[Tuple[str, int, int]], to
         minRank = getAttr(roi, '_minRankEl', float('inf'))
         return (-nProm, minRank)
 
-    deduped = _dedupeByCore(filtered, keyFn)
+    deduped = dedupeByCore(filtered, keyFn)
     deduped.sort(key=keyFn)
     return deduped[:topN]
 
 
 def selectCtlCandidates(rois: List, glycoRegions: List[Tuple[str, int, int]], topN: int) -> List:
     """Same as HTL, but prioritizes a confirmed NetCleave C-terminal cleavage match first."""
-    filtered = [r for r in rois if not _overlapsGlycoRegion(r, glycoRegions)]
+    filtered = [r for r in rois if not overlapsGlycoRegion(r, glycoRegions)]
     if not filtered:
         return filtered
 
@@ -160,12 +160,12 @@ def selectCtlCandidates(rois: List, glycoRegions: List[Tuple[str, int, int]], to
         minRank = getAttr(roi, '_minRankEl', float('inf'))
         return (0 if netcleaveMatch else 1, -nProm, minRank)
 
-    deduped = _dedupeByCore(filtered, keyFn)
+    deduped = dedupeByCore(filtered, keyFn)
     deduped.sort(key=keyFn)
     return deduped[:topN]
 
 
-def _collectBlocks(bcellSelected: List, htlSelected: List, ctlSelected: List) -> List[Tuple]:
+def collectBlocks(bcellSelected: List, htlSelected: List, ctlSelected: List) -> List[Tuple]:
     """Build the ordered (label, rois, intraLinker, seqGetter, noteFn) block list,
     skipping any class with no selected candidates."""
     blockSpecs = [
@@ -176,7 +176,7 @@ def _collectBlocks(bcellSelected: List, htlSelected: List, ctlSelected: List) ->
     return [spec for spec in blockSpecs if spec[1]]
 
 
-def _roiSourceFields(sourceRoi) -> dict:
+def roiSourceFields(sourceRoi) -> dict:
     """Segment metadata sourced from the originating ROI, or all-None for a linker/adjuvant segment."""
     if sourceRoi is None:
         return {'source_parent_id': None, 'source_start': None, 'source_end': None}
@@ -187,7 +187,7 @@ def _roiSourceFields(sourceRoi) -> dict:
     }
 
 
-def _appendSegment(segments: List[dict], cursor: int, blockLabel: str, sequence: str,
+def appendSegment(segments: List[dict], cursor: int, blockLabel: str, sequence: str,
                     sourceRoi=None, scoreNote: str = '') -> int:
     """Append one segment (epitope or linker) to ``segments`` and return the next cursor position."""
     end = cursor + len(sequence) - 1
@@ -197,19 +197,19 @@ def _appendSegment(segments: List[dict], cursor: int, blockLabel: str, sequence:
         'start': cursor,
         'end': end,
         'source_score_note': scoreNote,
-        **_roiSourceFields(sourceRoi),
+        **roiSourceFields(sourceRoi),
     })
     return end + 1
 
 
-def _appendBlockSegments(segments: List[dict], cursor: int, block: Tuple) -> int:
+def appendBlockSegments(segments: List[dict], cursor: int, block: Tuple) -> int:
     """Append every ROI in one class block, with its intra-class linker between consecutive ROIs."""
     label, rois, intraLinker, seqGetter, noteFn = block
     lastIdx = len(rois) - 1
     for i, roi in enumerate(rois):
-        cursor = _appendSegment(segments, cursor, label, seqGetter(roi), roi, noteFn(roi))
+        cursor = appendSegment(segments, cursor, label, seqGetter(roi), roi, noteFn(roi))
         if i < lastIdx:
-            cursor = _appendSegment(segments, cursor, f'Linker (intra-{label})', intraLinker)
+            cursor = appendSegment(segments, cursor, f'Linker (intra-{label})', intraLinker)
     return cursor
 
 
@@ -233,7 +233,7 @@ def assembleConstruct(
         ``sequence`` in order reconstructs ``construct_sequence`` exactly.
         ``("", [])`` if all 3 classes are empty and no adjuvant is given.
     """
-    blocks = _collectBlocks(bcellSelected, htlSelected, ctlSelected)
+    blocks = collectBlocks(bcellSelected, htlSelected, ctlSelected)
     if not blocks and not adjuvantSequence:
         return '', []
 
@@ -241,14 +241,14 @@ def assembleConstruct(
     cursor = 1
 
     if adjuvantSequence:
-        cursor = _appendSegment(segments, cursor, 'Adjuvant', adjuvantSequence)
-        cursor = _appendSegment(segments, cursor, 'Linker', CONSTRUCT_LINKER_ADJUVANT)
+        cursor = appendSegment(segments, cursor, 'Adjuvant', adjuvantSequence)
+        cursor = appendSegment(segments, cursor, 'Linker', CONSTRUCT_LINKER_ADJUVANT)
 
     lastBlockIdx = len(blocks) - 1
     for blockIdx, block in enumerate(blocks):
-        cursor = _appendBlockSegments(segments, cursor, block)
+        cursor = appendBlockSegments(segments, cursor, block)
         if blockIdx < lastBlockIdx:
-            cursor = _appendSegment(segments, cursor, 'Linker (inter-block)', CONSTRUCT_LINKER_INTERBLOCK)
+            cursor = appendSegment(segments, cursor, 'Linker (inter-block)', CONSTRUCT_LINKER_INTERBLOCK)
 
     constructSequence = ''.join(s['sequence'] for s in segments)
     return constructSequence, segments
