@@ -40,7 +40,7 @@ from pyworkflow.protocol import params
 from immuno import Plugin as immunoPlugin
 from ..constants import TMBED_OUT_FORMAT
 from ..utils.tmbed_exceptions import TMbedExecutionError
-from ..utils.tmbed_utils import extract_masking_regions, parse_predictions
+from ..utils.tmbed_utils import extractMaskingRegions, parsePredictions
 
 
 class ProtTMbedPredict(EMProtocol):
@@ -117,13 +117,13 @@ class ProtTMbedPredict(EMProtocol):
         if not os.path.isfile(predPath):
             return
 
-        records = parse_predictions(predPath)
+        records = parsePredictions(predPath)
         if not records:
             return
 
         # Single-sequence input: exactly one record is expected.
         _, classes = next(iter(records.values()))
-        regions = extract_masking_regions(classes, min_length=self.minRegionLength.get())
+        regions = extractMaskingRegions(classes, minLength=self.minRegionLength.get())
 
         inpSeq = self.inputSequence.get()
         fullSequence = inpSeq.getSequence()

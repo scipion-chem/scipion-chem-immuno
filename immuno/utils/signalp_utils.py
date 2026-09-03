@@ -11,7 +11,7 @@ class SignalPParseError(Exception):
     """The SignalP-6.0 output does not match the expected format."""
 
 
-def parse_output(results_path: Path, n_expected: int) -> pd.DataFrame:
+def parseOutput(resultsPath: Path, nExpected: int) -> pd.DataFrame:
     """Parse SignalP-6.0's ``prediction_results.txt``.
 
     ``prediction_results.txt`` carries a VARIABLE number of ``#``-prefixed
@@ -29,9 +29,9 @@ def parse_output(results_path: Path, n_expected: int) -> pd.DataFrame:
         prediction is ``'OTHER'``).
     """
     try:
-        raw = pd.read_csv(results_path, sep='\t', comment='#', header=None)
+        raw = pd.read_csv(resultsPath, sep='\t', comment='#', header=None)
     except Exception as exc:
-        raise SignalPParseError(f"Could not parse SignalP-6.0 output at '{results_path}': {exc}") from exc
+        raise SignalPParseError(f"Could not parse SignalP-6.0 output at '{resultsPath}': {exc}") from exc
 
     if raw.shape[1] != len(_COLUMNS):
         raise SignalPParseError(
@@ -40,8 +40,8 @@ def parse_output(results_path: Path, n_expected: int) -> pd.DataFrame:
         )
     raw.columns = _COLUMNS
 
-    if len(raw) != n_expected:
-        raise SignalPParseError(f"SignalP-6.0 returned {len(raw)} prediction(s), {n_expected} were expected.")
+    if len(raw) != nExpected:
+        raise SignalPParseError(f"SignalP-6.0 returned {len(raw)} prediction(s), {nExpected} were expected.")
 
     return pd.DataFrame({
         'signalp_prediction': raw['Prediction'].tolist(),

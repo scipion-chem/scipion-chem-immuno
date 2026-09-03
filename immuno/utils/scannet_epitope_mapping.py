@@ -9,10 +9,10 @@ sequence per run the way a purely linear predictor would).
 
 import pandas as pd
 
-from .sliding_window_mapping import find_valid_windows, merge_overlapping_windows
+from .sliding_window_mapping import findValidWindows, mergeOverlappingWindows
 
 
-def extract_epitope_regions(
+def extractEpitopeRegions(
     scoresDf: pd.DataFrame,
     groupCol: str,
     scoreCol: str,
@@ -36,8 +36,8 @@ def extract_epitope_regions(
         group = group.reset_index(drop=True)
         scores = group[scoreCol].tolist()
 
-        validWindows = find_valid_windows(scores, threshold, windowSize, maxGapResidues)
-        mergedRegions = merge_overlapping_windows(validWindows)
+        validWindows = findValidWindows(scores, threshold, windowSize, maxGapResidues)
+        mergedRegions = mergeOverlappingWindows(validWindows)
 
         for start, end in mergedRegions:
             length = end - start + 1

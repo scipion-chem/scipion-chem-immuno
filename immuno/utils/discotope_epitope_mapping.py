@@ -10,10 +10,10 @@ from typing import List
 
 import pandas as pd
 
-from .sliding_window_mapping import find_valid_windows, merge_overlapping_windows
+from .sliding_window_mapping import findValidWindows, mergeOverlappingWindows
 
 
-def extract_epitope_regions(
+def extractEpitopeRegions(
     scores: List[float], residues: List[str], threshold: float, minLength: int,
     windowSize: int, maxGapResidues: int,
 ) -> pd.DataFrame:
@@ -26,8 +26,8 @@ def extract_epitope_regions(
         DataFrame with columns ``start``, ``end``, ``length``,
         ``mean_score``, ``max_score``, ``sequence``.
     """
-    validWindows = find_valid_windows(scores, threshold, windowSize, maxGapResidues)
-    mergedRegions = merge_overlapping_windows(validWindows)
+    validWindows = findValidWindows(scores, threshold, windowSize, maxGapResidues)
+    mergedRegions = mergeOverlappingWindows(validWindows)
 
     records = []
     for start, end in mergedRegions:

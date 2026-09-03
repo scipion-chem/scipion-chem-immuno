@@ -14,7 +14,7 @@ class ScanNetParseError(Exception):
     """The ScanNet output CSV does not match the expected format."""
 
 
-def build_command(pdbPath: Path, resultDir: Path, name: str) -> str:
+def buildCommand(pdbPath: Path, resultDir: Path, name: str) -> str:
     # No 'predict_bindingsites.py'/install_path prefix here: the caller
     # (Plugin.runScanNet) prepends the script name and must set
     # cwd=getScanNetDir() (ScanNet resolves its own 'models/' path relative
@@ -26,7 +26,7 @@ def build_command(pdbPath: Path, resultDir: Path, name: str) -> str:
     )
 
 
-def load_raw_scores(resultDir: Path) -> pd.DataFrame:
+def loadRawScores(resultDir: Path) -> pd.DataFrame:
     """Locate and load the (single) 'predictions_*.csv' ScanNet writes.
 
     Located via glob (not the exact reconstructed path,

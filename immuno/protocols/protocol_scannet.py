@@ -44,9 +44,9 @@ from ..constants import (
     SCANNET_RAW_RESIDUE_COLUMN as RAW_RESIDUE_COLUMN,
     SCANNET_RAW_SCORE_COLUMN as RAW_SCORE_COLUMN,
 )
-from ..utils.scannet_epitope_mapping import extract_epitope_regions
+from ..utils.scannet_epitope_mapping import extractEpitopeRegions
 from ..utils.scannet_exceptions import ScanNetExecutionError
-from ..utils.scannet_utils import build_command, load_raw_scores
+from ..utils.scannet_utils import buildCommand, loadRawScores
 
 
 class ProtScanNetPrediction(EMProtocol):
@@ -124,10 +124,10 @@ class ProtScanNetPrediction(EMProtocol):
         name = pdbPath.stem
 
         home = immunoPlugin.getScanNetDir()
-        args = build_command(pdbPath, resultDir, name)
+        args = buildCommand(pdbPath, resultDir, name)
         immunoPlugin.runScanNet(self, args, cwd=home)
 
-        rawDf = load_raw_scores(resultDir)
+        rawDf = loadRawScores(resultDir)
         rawDf.to_csv(self._getRawScoresPath(), index=False)
 
     def createOutputStep(self):
@@ -141,7 +141,7 @@ class ProtScanNetPrediction(EMProtocol):
         frames = []
         for chain, group in rawDf.groupby(RAW_CHAIN_COLUMN, sort=False):
             adaptiveThreshold = float(np.percentile(group[RAW_SCORE_COLUMN], self.thresholdPercentile.get()))
-            regionsDf = extract_epitope_regions(
+            regionsDf = extractEpitopeRegions(
                 group, groupCol=RAW_CHAIN_COLUMN, scoreCol=RAW_SCORE_COLUMN, residueCol=RAW_RESIDUE_COLUMN,
                 threshold=adaptiveThreshold, minLength=self.minLength.get(),
                 windowSize=self.windowSize.get(), maxGapResidues=self.maxGapResidues.get(),

@@ -23,19 +23,19 @@ MASKED_CLASS_TYPES = {
 }
 
 
-def parse_predictions(pred_path: str) -> Dict[str, Tuple[str, str]]:
+def parsePredictions(predPath: str) -> Dict[str, Tuple[str, str]]:
     """Parse a TMbed 3-line prediction file into {header: (sequence, classes)}.
 
     Raises TMbedParseError if the file is empty, truncated, or a
     sequence/prediction length mismatch is found (should not happen unless
     TMbed's own output contract changes).
     """
-    with open(pred_path) as fh:
+    with open(predPath) as fh:
         lines = [line.rstrip('\n') for line in fh if line.strip()]
 
     if not lines or len(lines) % 3 != 0:
         raise TMbedParseError(
-            f"TMbed output at '{pred_path}' does not have the expected 3-line-per-protein format "
+            f"TMbed output at '{predPath}' does not have the expected 3-line-per-protein format "
             f"(header/sequence/prediction): found {len(lines)} non-empty line(s)."
         )
 
@@ -43,10 +43,10 @@ def parse_predictions(pred_path: str) -> Dict[str, Tuple[str, str]]:
     for i in range(0, len(lines), 3):
         header, sequence, classes = lines[i], lines[i + 1], lines[i + 2]
         if not header.startswith('>'):
-            raise TMbedParseError(f"Expected a FASTA header at line {i + 1} of '{pred_path}', got: '{header}'.")
+            raise TMbedParseError(f"Expected a FASTA header at line {i + 1} of '{predPath}', got: '{header}'.")
         if len(sequence) != len(classes):
             raise TMbedParseError(
-                f"Sequence/prediction length mismatch for '{header}' in '{pred_path}': "
+                f"Sequence/prediction length mismatch for '{header}' in '{predPath}': "
                 f"{len(sequence)} residue(s) vs {len(classes)} class letter(s)."
             )
         records[header[1:].strip()] = (sequence, classes)
@@ -54,14 +54,14 @@ def parse_predictions(pred_path: str) -> Dict[str, Tuple[str, str]]:
     return records
 
 
-def extract_masking_regions(classes: str, min_length: int = 1) -> List[dict]:
+def extractMaskingRegions(classes: str, minLength: int = 1) -> List[dict]:
     """Collapse a per-residue class string into contiguous masking regions.
 
     Only residues classified as 'B' (TM beta-strand), 'H' (TM alpha-helix)
     or 'S' (signal peptide) are turned into regions; 'i'/'o' (non-membrane
     loop) residues are skipped. Returns a list of dicts with 1-indexed
     'start', 'end' and 'type' (see MASKED_CLASS_TYPES), in sequence order,
-    dropping any region shorter than min_length.
+    dropping any region shorter than minLength.
     """
     regions = []
     curType, start = None, None
@@ -70,10 +70,10 @@ def extract_masking_regions(classes: str, min_length: int = 1) -> List[dict]:
         roiType = MASKED_CLASS_TYPES.get(classes[i])
         pos = i + 1
         if roiType != curType:
-            if curType is not None and (pos - start) >= min_length:
+            if curType is not None and (pos - start) >= minLength:
                 regions.append({'start': start, 'end': pos - 1, 'type': curType})
             curType = roiType
             start = pos if roiType is not None else None
-    if curType is not None and (n + 1 - start) >= min_length:
+    if curType is not None and (n + 1 - start) >= minLength:
         regions.append({'start': start, 'end': n, 'type': curType})
     return regions

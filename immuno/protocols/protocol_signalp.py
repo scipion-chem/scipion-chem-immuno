@@ -39,7 +39,7 @@ from pyworkflow.protocol import params
 from immuno import Plugin as immunoPlugin
 from ..constants import SIGNALP_DEFAULT_ORGANISM as DEFAULT_ORGANISM, SIGNALP_DIC
 from ..utils.signalp_exceptions import SignalPExecutionError
-from ..utils.signalp_utils import parse_output
+from ..utils.signalp_utils import parseOutput
 
 
 class ProtSignalPPrediction(EMProtocol):
@@ -137,7 +137,7 @@ class ProtSignalPPrediction(EMProtocol):
         if not sequences:
             return
 
-        resultDf = parse_output(self._getRawResultsPath(), n_expected=len(sequences))
+        resultDf = parseOutput(self._getRawResultsPath(), nExpected=len(sequences))
 
         outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
         for roi, row in zip(rois, resultDf.itertuples(index=False)):
