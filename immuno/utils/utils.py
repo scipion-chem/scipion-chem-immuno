@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import time, os, requests, subprocess as sp
+import tempfile, time, os, requests, subprocess as sp
 from Bio import SeqIO
 
 from pwchem import Plugin as pwchemPlugin
@@ -267,7 +267,16 @@ def callIIITD(seqDic, software, evalDic, outFile):
   if os.path.exists(outFile):
     os.remove(outFile)
   fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {software.lower()} '
-  return sp.Popen(fullProgram + args, shell=True)
+  # Several IIITD CLIs (confirmed real for toxinpred2's Hybrid mode: reads/
+  # writes 'seq.aac' and other intermediate files relative to the process
+  # cwd, not to -i/-o) -- running two evaluators concurrently (this
+  # function is called from a multiprocessing.Pool) with no cwd isolation
+  # causes them to collide on those shared filenames (a real 'seq.aac not
+  # found' crash was reproduced this way). -i/-o are always absolute here
+  # (outFile/faFile are built from an already-absolute outDir), so handing
+  # each call its own throwaway cwd is safe.
+  workDir = tempfile.mkdtemp(prefix=f'{software.lower()}_', dir=outDir)
+  return sp.Popen(fullProgram + args, shell=True, cwd=workDir)
 
 def getArgs(evalDic):
   mapKeysDic = {'Thval': '-t', 'Window': '-w', 'Method': '-m', 'Host': '-s'}
@@ -664,11 +673,24 @@ def parseAlgPred2(driver):
 def parseIIITD(outFile, software):
   scoreCol = {'toxinpred3': 2, 'algpred2': 2, 'ifnepitope2': 4, 'il13pred': 3, 'il5pred': 4,
               'il6pred': 3, 'toxinpred2': 2}
-  sCol = scoreCol[software.lower()]
 
   scores = []
   with open(outFile) as f:
-    f.readline()
+    header = f.readline().strip().split(',')
+    # algpred2/toxinpred2 in Hybrid mode write a DIFFERENT column layout
+    # (Subject,ML Score,MERCI Score/Hits,BLAST Score,Hybrid Score,Prediction)
+    # than in AAC-only mode (ID,Sequence,ML_Score,Prediction) -- confirmed
+    # by running both CLIs for real. The fixed index 2 above is only
+    # correct for AAC mode (where it lands on 'ML_Score'); in Hybrid mode
+    # it silently lands on the MERCI column instead of the intended
+    # combined score. Select by column NAME when 'Hybrid Score' is present
+    # (Hybrid mode), falling back to the fixed index otherwise (AAC mode,
+    # and every other software in scoreCol that this project hasn't
+    # verified against a Hybrid-shaped output).
+    if 'Hybrid Score' in header:
+      sCol = header.index('Hybrid Score')
+    else:
+      sCol = scoreCol[software.lower()]
     for line in f:
       scores.append(float(line.split(',')[sCol]))
   return scores

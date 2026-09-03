@@ -53,6 +53,20 @@ class Plugin(pwchemPlugin):
 
 		cls._defineEmVar(VAXIGNML_DIC['home'], VAXIGNML_DIC['name'] + '-' + VAXIGNML_DIC['version'])
 
+		cls._defineEmVar(SCANNET_DIC['home'], cls.getEnvName(SCANNET_DIC))
+		cls._defineVar(SCANNET_DIC['activation'], cls.getEnvActivationCommand(SCANNET_DIC))
+
+		cls._defineEmVar(DISCOTOPE_DIC['home'], cls.getEnvName(DISCOTOPE_DIC))
+		cls._defineVar(DISCOTOPE_DIC['activation'], cls.getEnvActivationCommand(DISCOTOPE_DIC))
+
+		cls._defineEmVar(TMBED_DIC['home'], cls.getEnvName(TMBED_DIC))
+		cls._defineVar(TMBED_DIC['activation'], cls.getEnvActivationCommand(TMBED_DIC))
+
+		# SignalP-6.0 never auto-installs (academic license): no _defineEmVar
+		cls._defineVar(SIGNALP_DIC['python_bin'], '')
+		cls._defineVar(SIGNALP_DIC['binary_name'], SIGNALP_DEFAULT_BINARY_NAME)
+		cls._defineVar(SIGNALP_DIC['model_dir'], '')
+
 	@classmethod
 	def defineBinaries(cls, env, default=True):
 		"""This function defines the binaries for each package."""
@@ -60,6 +74,11 @@ class Plugin(pwchemPlugin):
 		cls.addIIITDWPackage(env)
 		cls.addIL6PredPackage(env)
 		cls.addVaxignMLPackage(env)
+		cls.addScanNetPackage(env)
+		cls.addDiscoTopePackage(env)
+		cls.addTMbedPackage(env)
+		# SignalP-6.0: no-op, never installed automatically (academic license,
+		# not redistributable) -- see validateInstallation/README.rst.
 
 	@classmethod
 	def addIIITDPackage(cls, env, default=True):
@@ -281,6 +300,223 @@ class Plugin(pwchemPlugin):
 			insistentRun(protocol, program, args, cwd=cwd, popen=True)
 			# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
 
+
+	@classmethod
+	def addScanNetPackage(cls, env, default=True):
+		home = cls.getVar(SCANNET_DIC['home'])
+
+		installer = InstallHelper(SCANNET_DIC['name'], packageHome=home,
+															packageVersion=SCANNET_DIC['version'])
+
+		# Clone BEFORE creating the conda env: 'getCondaEnvCommand' leaves its
+		# own completion marker inside 'home', which then blocks a subsequent
+		# 'git clone' into that same now-nonempty directory.
+		installer.addCommand(
+			f"git clone --depth 1 {SCANNET_UPSTREAM_URL} {home}",
+			'SCANNET_CLONED'
+		).getCondaEnvCommand(
+			SCANNET_DIC['name'], binaryVersion=SCANNET_DIC['version'], pythonVersion='3.6.12'
+		).addCommand(
+			f"{cls.getEnvActivationCommand(SCANNET_DIC)} && "
+			f"cd {home} && pip install -r requirements.txt",
+			'SCANNET_INSTALLED'
+		).addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
+	def addDiscoTopePackage(cls, env, default=True):
+		# Python is pinned to 3.14, per the upstream project's own README, not
+		# the stale 'Python :: 3.9' classifier in its setup.py.
+		home = cls.getVar(DISCOTOPE_DIC['home'])
+		weightsCacheDir = cls.getDiscoTopeWeightsCacheDir()
+
+		installer = InstallHelper(DISCOTOPE_DIC['name'], packageHome=home,
+															packageVersion=DISCOTOPE_DIC['version'])
+
+		installer.addCommand(
+			f"git clone --depth 1 {DISCOTOPE_UPSTREAM_URL} {home}",
+			'DISCOTOPE_CLONED'
+		).getCondaEnvCommand(
+			DISCOTOPE_DIC['name'], binaryVersion=DISCOTOPE_DIC['version'], pythonVersion='3.14'
+		).addCommand(
+			# 'unzip' installed as a conda package INSIDE this env, not relied
+			# upon as a system binary: 'conda activate' replaces PATH entirely.
+			f"{cls.getEnvActivationCommand(DISCOTOPE_DIC)} && "
+			"conda install -y -c conda-forge unzip && "
+			f"cd {home} && pip install -r requirements.txt && pip install . && unzip -q models.zip",
+			'DISCOTOPE_DEPS_INSTALLED'
+		).addCommand(
+			f"mkdir -p {weightsCacheDir} && "
+			f"{cls.getEnvActivationCommand(DISCOTOPE_DIC)} && "
+			f"TORCH_HOME={weightsCacheDir} python -c "
+			f"\"from discotope3.esm.pretrained import esm_if1_gvp4_t16_142M_UR50; "
+			f"esm_if1_gvp4_t16_142M_UR50()\"",
+			'DISCOTOPE_INSTALLED'
+		).addPackage(env, dependencies=['conda', 'git', 'unzip'], default=default)
+
+	@classmethod
+	def addTMbedPackage(cls, env, default=True):
+		home = cls.getVar(TMBED_DIC['home'])
+		modelDir = cls.getTMbedModelDir()
+		primeT5Cmd = (
+			f"python -c \"from tmbed.embed import T5Encoder; "
+			f"T5Encoder(model_path='{modelDir}', use_gpu=False)\""
+		)
+
+		installer = InstallHelper(TMBED_DIC['name'], packageHome=home,
+															packageVersion=TMBED_DIC['version'])
+
+		# TMbed is not published on PyPI: installed from its tagged GitHub
+		# release. transformers is pinned <5: TMbed's own embed.py still
+		# calls T5Tokenizer.batch_encode_plus, removed in transformers 5.x.
+		installer.getCondaEnvCommand(
+			TMBED_DIC['name'], binaryVersion=TMBED_DIC['version'], pythonVersion='3.10'
+		).addCommand(
+			f"{cls.getEnvActivationCommand(TMBED_DIC)} && "
+			f"pip install git+{TMBED_DOWNLOAD_URL}.git@v{TMBED_DIC['version']} && "
+			"pip install 'transformers<5' protobuf tiktoken",
+			'TMBED_INSTALLED'
+		).addCommand(
+			f"mkdir -p {modelDir} && {cls.getEnvActivationCommand(TMBED_DIC)} && {primeT5Cmd}",
+			'TMBED_WEIGHTS_CACHED'
+		).addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
+	def validateScanNetInstallation(cls):
+		errors = []
+		home = cls.getScanNetDir()
+		if not os.path.isfile(os.path.join(home, 'predict_bindingsites.py')):
+			errors.append(f"Could not find 'predict_bindingsites.py' under SCANNET_HOME: '{home}'.")
+		elif not cls.checkCallEnv(SCANNET_DIC, 'import numpy'):
+			errors.append("Activation of the ScanNet conda environment failed.")
+		if errors:
+			errors.append(SCANNET_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
+	def validateDiscoTopeInstallation(cls):
+		errors = []
+		mainScript = cls.getDiscoTopeMainScriptPath()
+		modelsDir = cls.getDiscoTopeModelsDir()
+		if not os.path.isfile(mainScript):
+			errors.append(f"Could not find 'discotope3/main.py' under DISCOTOPE_HOME: '{cls.getDiscoTopeDir()}'.")
+		elif not os.path.isdir(modelsDir):
+			errors.append(f"Could not find the unzipped 'models/' folder under DISCOTOPE_HOME: '{modelsDir}'.")
+		elif not cls.checkCallEnv(DISCOTOPE_DIC, 'import discotope3'):
+			errors.append("Activation of the DiscoTope-3.0 conda environment failed.")
+		if errors:
+			errors.append(DISCOTOPE_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
+	def validateTMbedInstallation(cls):
+		errors = []
+		modelDir = cls.getTMbedModelDir()
+		missing = [fn for fn in TMBED_T5_MODEL_REQUIRED_FILES if not os.path.isfile(os.path.join(modelDir, fn))]
+		if not any(os.path.isfile(os.path.join(modelDir, fn)) for fn in TMBED_T5_MODEL_WEIGHT_FILE_ALTERNATIVES):
+			missing.append(f"one of {TMBED_T5_MODEL_WEIGHT_FILE_ALTERNATIVES}")
+		if not any(os.path.isfile(os.path.join(modelDir, fn)) for fn in TMBED_T5_MODEL_TOKENIZER_FILE_ALTERNATIVES):
+			missing.append(f"one of {TMBED_T5_MODEL_TOKENIZER_FILE_ALTERNATIVES}")
+		if missing:
+			errors.append(f"TMBED_HOME ('{cls.getTMbedDir()}') is missing expected ProtT5 file(s) "
+										f"under '{modelDir}': {missing}.")
+		elif not cls.checkCallEnv(TMBED_DIC, 'tmbed --help', isModuleImport=False):
+			errors.append("Activation of the TMbed conda environment failed.")
+		if errors:
+			errors.append(TMBED_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
+	def validateSignalPInstallation(cls):
+		errors = []
+		pythonBin = cls.getVar(SIGNALP_DIC['python_bin'])
+		binaryPath = cls.getSignalPBinaryPath()
+		if not pythonBin or not os.path.isfile(pythonBin):
+			errors.append(f"SIGNALP_PYTHON_BIN is not set or does not exist: '{pythonBin}'.")
+		elif not binaryPath or not os.path.isfile(binaryPath):
+			errors.append(f"Could not find the local SignalP-6.0 binary at '{binaryPath}'.")
+		modelDir = cls.getVar(SIGNALP_DIC['model_dir'])
+		if not modelDir or not os.path.isdir(os.path.join(modelDir or '', 'sequential_models_signalp6')):
+			errors.append(f"Could not find 'sequential_models_signalp6/' under SIGNALP_MODEL_DIR: '{modelDir}'.")
+		if errors:
+			errors.append(SIGNALP_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
+	def checkCallEnv(cls, packageDic, checkCmd, isModuleImport=True):
+		actCommand = cls.getVar(packageDic['activation'])
+		pyCmd = f'python -c "{checkCmd}"' if isModuleImport else checkCmd
+		try:
+			if 'conda' in actCommand and 'shell.bash hook' not in actCommand:
+				actCommand = f'{cls.getCondaActivationCmd()}{actCommand}'
+			subprocess.check_output(f'{actCommand} && {pyCmd}', shell=True)
+			return True
+		except subprocess.CalledProcessError:
+			return False
+
+	# ---------------------------------- Utils (ScanNet/DiscoTope/TMbed/SignalP) --
+
+	@classmethod
+	def getScanNetDir(cls):
+		return cls.getVar(SCANNET_DIC['home'])
+
+	@classmethod
+	def getDiscoTopeDir(cls):
+		return cls.getVar(DISCOTOPE_DIC['home'])
+
+	@classmethod
+	def getDiscoTopeMainScriptPath(cls):
+		return os.path.join(cls.getDiscoTopeDir(), 'discotope3', 'main.py')
+
+	@classmethod
+	def getDiscoTopeModelsDir(cls):
+		return os.path.join(cls.getDiscoTopeDir(), 'models')
+
+	@classmethod
+	def getDiscoTopeWeightsCacheDir(cls):
+		return os.path.join(cls.getDiscoTopeDir(), '.torch_cache')
+
+	@classmethod
+	def getTMbedDir(cls):
+		return cls.getVar(TMBED_DIC['home'])
+
+	@classmethod
+	def getTMbedModelDir(cls):
+		return os.path.join(cls.getTMbedDir(), 'prott5_weights')
+
+	@classmethod
+	def getSignalPBinaryPath(cls):
+		pythonBin = cls.getVar(SIGNALP_DIC['python_bin'])
+		if not pythonBin:
+			return None
+		return os.path.join(os.path.dirname(pythonBin), cls.getVar(SIGNALP_DIC['binary_name']))
+
+	# ---------------------------------- Protocol functions (ScanNet/DiscoTope/TMbed) --
+
+	@classmethod
+	def runScanNet(cls, protocol, args, cwd=None):
+		# ScanNet resolves its own 'models/' path relative to the process cwd,
+		# not the script's own location -- caller must pass cwd=getScanNetDir().
+		activation = cls.getVar(SCANNET_DIC['activation'])
+		fullProgram = f'{activation} && python predict_bindingsites.py'
+		protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+
+	@classmethod
+	def runDiscoTope(cls, protocol, args, cwd=None):
+		# runJob's 'env' kwarg expects a pyworkflow Environ object, not a plain
+		# dict -- TORCH_HOME is set on os.environ directly instead, which a
+		# subprocess launched with no explicit 'env' override inherits.
+		os.environ['TORCH_HOME'] = cls.getDiscoTopeWeightsCacheDir()
+		activation = cls.getVar(DISCOTOPE_DIC['activation'])
+		fullProgram = f'{activation} && python {cls.getDiscoTopeMainScriptPath()}'
+		protocol.runJob(fullProgram, args, cwd=cwd)
+
+	@classmethod
+	def runTMbed(cls, protocol, args, cwd=None):
+		""" Run TMbed's 'predict' subcommand through the dedicated conda env
+		(TMbed requires an exact torch/transformers/sentencepiece stack). """
+		activation = cls.getVar(TMBED_DIC['activation'])
+		fullProgram = f'{activation} && tmbed'
+		protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
 	# ---------------------------------- Utils functions-----------------------
 	@classmethod
