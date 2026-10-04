@@ -53,6 +53,8 @@ class Plugin(pwchemPlugin):
 
 		cls._defineEmVar(VAXIGNML_DIC['home'], VAXIGNML_DIC['name'] + '-' + VAXIGNML_DIC['version'])
 
+		cls._defineEmVar(EPIDOPE_DIC['home'], cls.getEnvName(EPIDOPE_DIC))
+
 		cls._defineEmVar(SCANNET_DIC['home'], cls.getEnvName(SCANNET_DIC))
 		cls._defineVar(SCANNET_DIC['activation'], cls.getEnvActivationCommand(SCANNET_DIC))
 
@@ -67,6 +69,17 @@ class Plugin(pwchemPlugin):
 		cls._defineVar(SIGNALP_DIC['binary_name'], SIGNALP_DEFAULT_BINARY_NAME)
 		cls._defineVar(SIGNALP_DIC['model_dir'], '')
 
+		cls._defineEmVar(IAPRED_DIC['home'], cls.getEnvName(IAPRED_DIC))
+		cls._defineVar(IAPRED_DIC['activation'], cls.getEnvActivationCommand(IAPRED_DIC))
+		cls._defineVar(IAPRED_DIC['script_name'], IAPRED_DEFAULT_SCRIPT_NAME)
+
+		cls._defineEmVar(NETCLEAVE_DIC['home'], cls.getEnvName(NETCLEAVE_DIC))
+		cls._defineVar(NETCLEAVE_DIC['activation'], cls.getEnvActivationCommand(NETCLEAVE_DIC))
+
+		cls._defineEmVar(STACKGLYEMBED_DIC['home'], cls.getEnvName(STACKGLYEMBED_DIC))
+		cls._defineVar(STACKGLYEMBED_DIC['activation'], cls.getEnvActivationCommand(STACKGLYEMBED_DIC))
+		cls._defineVar(STACKGLYEMBED_DIC['esm_model_name'], STACKGLYEMBED_DEFAULT_ESM_MODEL_NAME)
+
 	@classmethod
 	def defineBinaries(cls, env, default=True):
 		"""This function defines the binaries for each package."""
@@ -74,9 +87,13 @@ class Plugin(pwchemPlugin):
 		cls.addIIITDWPackage(env)
 		cls.addIL6PredPackage(env)
 		cls.addVaxignMLPackage(env)
+		cls.addEpiDopePackage(env)
 		cls.addScanNetPackage(env)
 		cls.addDiscoTopePackage(env)
 		cls.addTMbedPackage(env)
+		cls.addIApredPackage(env)
+		cls.addNetCleavePackage(env)
+		cls.addStackGlyEmbedPackage(env)
 		# SignalP-6.0: no-op, never installed automatically (academic license,
 		# not redistributable) -- see validateInstallation/README.rst.
 
@@ -302,6 +319,274 @@ class Plugin(pwchemPlugin):
 
 
 	@classmethod
+	def addEpiDopePackage(cls, env, default=True):
+		# The environment MUST be created from the epidope.yml EpiDope ships
+		# (Python 3.6, TensorFlow 1.13, ELMo/AllenNLP), installed directly at
+		# EPIDOPE_HOME via '-p' so downstream code can rely on a stable
+		# '<EPIDOPE_HOME>/bin/epidope' path regardless of where conda keeps its
+		# named environments.
+		installer = InstallHelper(EPIDOPE_DIC['name'], packageHome=cls.getVar(EPIDOPE_DIC['home']),
+															packageVersion=EPIDOPE_DIC['version'])
+
+		home = cls.getVar(EPIDOPE_DIC['home'])
+		installer.addCommand(
+			f'git clone --depth 1 {EPIDOPE_UPSTREAM_URL}.git',
+			'EPIDOPE_CLONED'
+		).addCommand(
+			f'cd EpiDope && conda env create -f epidope.yml -p {home}',
+			'EPIDOPE_INSTALLED'
+		).addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
+	def addStackGlyEmbedPackage(cls, env, default=True):
+		home = cls.getVar(STACKGLYEMBED_DIC['home'])
+		esmModelName = cls.getVar(STACKGLYEMBED_DIC['esm_model_name'])
+		t5ModelName = STACKGLYEMBED_DEFAULT_T5_MODEL_NAME
+		proteinbertDir = cls.getStackGlyEmbedProteinBertDir()
+		hfCacheDir = cls.getStackGlyEmbedHfCacheDir()
+
+		# ProteinBERT's load_pretrained_model() defaults to an INTERACTIVE
+		# confirmation prompt before downloading (validate_downloading=True
+		# by default, confirmed by reading nadavbra/protein_bert's own
+		# existing_model_loading.py) -- would hang a non-interactive
+		# 'scipion3 installb' forever waiting on stdin. Explicitly disabled
+		# here, install-time only (the runtime call in predict_local.py
+		# keeps download_model_dump_if_not_exists=False, so a MISSING dump
+		# still fails loudly instead of silently reaching the network).
+		#
+		# Real bug found+fixed via an actual 'scipion3 installb'
+		# run: load_pretrained_model()'s own DEFAULT_REMOTE_MODEL_DUMP_URL
+		# is an FTP URL (ftp://ftp.cs.huji.ac.il/...) -- confirmed a real,
+		# reproducible network-level connection timeout on port 21 in this
+		# environment (many networks/firewalls block outbound FTP). Fixed
+		# by pre-downloading the exact same file over HTTPS from a real,
+		# verified mirror (github.com/nadavbra/proteinbert_data_files,
+		# same author as the upstream repo, byte-identical 192MB file
+		# confirmed via a real HTTPS request) directly to the path
+		# load_pretrained_model() itself checks first
+		# ('{proteinbertDir}/default.pkl', confirmed reading its source:
+		# DEFAULT_LOCAL_MODEL_DUMP_FILE_NAME='default.pkl') -- since that
+		# exact file already exists, load_pretrained_model() skips its own
+		# download entirely and just loads it, so this also works
+		# unmodified for anyone whose network allows the FTP path (the curl
+		# step becomes a harmless no-op once cached, and the call below is
+		# kept as-is as a fallback for the (empty) case where it doesn't).
+		proteinbertMirrorUrl = (
+			"https://github.com/nadavbra/proteinbert_data_files/raw/master/"
+			"epoch_92400_sample_23500000.pkl"
+		)
+		downloadProteinBertCmd = (
+			f"curl -fsSL -o {proteinbertDir}/default.pkl {proteinbertMirrorUrl}"
+		)
+		primeProteinBertCmd = (
+			f"{downloadProteinBertCmd} && "
+			f"python -c \"from proteinbert import load_pretrained_model; "
+			f"load_pretrained_model(local_model_dump_dir='{proteinbertDir}', "
+			f"download_model_dump_if_not_exists=True, validate_downloading=False)\""
+		)
+		# ESM-2 and ProtT5 both resolve via transformers' HF Hub cache
+		# (HF_HOME redirected to a plugin-local dir instead of the user's
+		# global ~/.cache/huggingface): calling from_pretrained() once here
+		# with network available caches them for the fully offline runtime
+		# call in predict_local.py (which already sets
+		# HF_HUB_OFFLINE=1/TRANSFORMERS_OFFLINE=1).
+		primeHfCmd = (
+			f"HF_HOME={hfCacheDir} python -c \""
+			f"from transformers import AutoTokenizer, EsmModel, T5EncoderModel, T5Tokenizer; "
+			f"AutoTokenizer.from_pretrained('{esmModelName}'); "
+			f"EsmModel.from_pretrained('{esmModelName}'); "
+			f"T5Tokenizer.from_pretrained('{t5ModelName}', do_lower_case=False); "
+			f"T5EncoderModel.from_pretrained('{t5ModelName}')\""
+		)
+
+		installer = InstallHelper(STACKGLYEMBED_DIC['name'], packageHome=home,
+								  packageVersion=STACKGLYEMBED_DIC['version'])
+
+		# requirements.txt IS used (patched in place first), following the
+		# same real precedent already established elsewhere in the
+		# scipion-chem/scipion-em ecosystem for an upstream dependency file
+		# that needs a small fix before it is installable as-is --
+		# confirmed by reading the real source of scipion-chem-bepipred
+		# ('sed -i 's/^torch==/#torch==/g' requirements.txt') and
+		# scipion-chem-iedb ('sed -i 's/^torch==1.12.0/torch/g'
+		# requirements.txt'), both `sed`-patch a bad line in-place and THEN
+		# install from the file, rather than abandoning it for a hardcoded
+		# list. Verified against the real upstream file: it is
+		# StackGlyEmbed's own TRAINING-framework file (Python 3.9.19), so
+		# patched the same way here:
+		#   - 'pytorch==2.2.2' commented out (not a real PyPI name as-is;
+		#     also too old for modern transformers regardless -- real torch
+		#     install happens as its own supplementary step below, from the
+		#     CPU-only wheel index)
+		#   - 'pickle5==0.0.11' commented out (Python<3.8-only backport,
+		#     this env is 3.10; also not imported by predict_local.py)
+		#   - PyQt5/shap/IPython/imblearn commented out (real training-only
+		#     extras, confirmed absent from predict_local.py's own
+		#     imports/pickle usage -- PyQt5 in particular is a heavy GUI/
+		#     X11 dependency, the single biggest real friction risk in a
+		#     headless conda env)
+		# 'xgboost==' is NOT commented out, unlike the others above (real
+		# bug found+fixed via an actual 'scipion3 test' run,
+		# AFTER everything else already worked): predict_local.py never
+		# writes 'import xgboost' directly, but it unpickles real
+		# 'XGB_base_layer_*.sav' files (predict.py::_base_layer_predictions)
+		# whose stored objects are actual xgboost.XGBClassifier instances --
+		# unpickling requires the defining class's module to be importable
+		# even with no direct import statement in the consuming script.
+		# Confirmed real: 'ModuleNotFoundError: No module named xgboost'
+		# at that exact unpickling call. This is a genuine runtime
+		# dependency, not a training-only extra like its neighbors.
+		# numpy/pandas/scikit-learn/matplotlib/xgboost keep their real
+		# upstream pins this way, so a future version bump upstream is
+		# tracked automatically -- same benefit as netcleave/iapred/
+		# scannet/discotope. transformers/tensorflow/protein-bert are NOT
+		# in this file at all (it predates a prediction path): the
+		# README's own separate "Prediction / Prerequisites" section
+		# documents those instead, installed as a supplementary step, same
+		# as IApred's imbalanced-learn/matplotlib/seaborn gap. PyPI package
+		# name is 'protein-bert' (hyphen), not 'proteinbert' -- that is
+		# only the importable module name.
+		patchRequirementsCmd = (
+			"sed -i "
+			"-e '/^pytorch==/s/^/#/' "
+			"-e '/^pickle5==/s/^/#/' "
+			"-e '/^PyQt5==/s/^/#/' "
+			"-e '/^shap==/s/^/#/' "
+			"-e '/^IPython==/s/^/#/' "
+			"-e '/^imblearn==/s/^/#/' "
+			"requirements.txt"
+		)
+
+		# Clone BEFORE creating the conda env (real bug found+fixed via an
+		# actual 'scipion3 installb' run -- see
+		# netcleave/__init__.py::addNetCleavePackage for the full
+		# explanation: 'getCondaEnvCommand' leaves its own completion
+		# marker inside 'home', which then blocks a subsequent 'git clone'
+		# into that same now-nonempty directory).
+		installer.addCommand(
+			f"git clone --depth 1 {STACKGLYEMBED_UPSTREAM_URL} {home}",
+			'STACKGLYEMBED_CLONED'
+		).getCondaEnvCommand(
+			STACKGLYEMBED_DIC['name'], binaryVersion=STACKGLYEMBED_DIC['version'], pythonVersion='3.10'
+		).addCommand(
+			# 'transformers<5' pinned explicitly (real bug found+fixed via
+			# an actual 'scipion3 installb' run -- same class
+			# of bug as scipion-chem-tmbed's own transformers pin): an
+			# unpinned 'pip install transformers' pulls the latest 5.x
+			# line, which requires 'torch>=2.4' -- confirmed real:
+			# 'EsmModel requires the PyTorch library but it was not found'
+			# even with a real torch installed, if it's too old.
+			# 'sentencepiece' also added explicitly (real, separate bug
+			# found the same run): T5Tokenizer needs it and neither
+			# StackGlyEmbed nor transformers declare it as a hard
+			# dependency (it is an optional extra upstream).
+			#
+			# torch installed SEPARATELY from the PyTorch CPU-only wheel
+			# index, plus an explicit purge of any nvidia-*/cuda-*/triton
+			# packages afterwards (real bug found+fixed, THIRD
+			# issue found installing this same run): a plain 'pip install
+			# torch' on Linux resolves the CUDA-enabled build by default
+			# regardless of whether a GPU/CUDA driver is actually present
+			# -- on this GPU-less machine that build caused a real,
+			# reproduced segfault (SIGSEGV, confirmed via 'python -X
+			# faulthandler') deep inside 'torch._dynamo' the moment
+			# 'transformers' imports it (masking_utils -> generation.utils
+			# -> torch._dynamo). Installing from
+			# 'download.pytorch.org/whl/cpu' alone was NOT enough to fully
+			# fix it once stray nvidia-*/cuda-bindings/triton packages were
+			# already present (confirmed real: the segfault persisted after
+			# switching torch's own build to '+cpu' until those extra
+			# packages -- pulled in as transitive deps of the CUDA build,
+			# e.g. by 'tensorflow[and-cuda]'-style bundling -- were also
+			# uninstalled) -- purging them explicitly as a real, verified
+			# fix, not just switching torch's own wheel.
+			#
+			# 'tensorflow<2.16' pinned (real, separate bug found the same
+			# run, AFTER the segfault was fixed): protein-bert's own
+			# model_generation.py calls
+			# 'keras.optimizers.Adam(lr=..., ...)', the legacy Keras 2 API
+			# -- Keras 3 (bundled by default from TF 2.16 onwards) removed
+			# the 'lr' alias entirely ('ValueError: Argument(s) not
+			# recognized: {\'lr\': ...}', confirmed real running an actual
+			# prediction). Pinning tensorflow keeps Keras 2 as the default
+			# backend, matching what protein-bert's own code was written
+			# against.
+			f"cd {home} && {patchRequirementsCmd} && "
+			f"{cls.getEnvActivationCommand(STACKGLYEMBED_DIC)} && "
+			"pip install -r requirements.txt && "
+			"pip install --index-url https://download.pytorch.org/whl/cpu torch && "
+			"pip install 'tensorflow<2.16' 'transformers<5' protein-bert sentencepiece && "
+			"pip uninstall -y cuda-bindings cuda-pathfinder cuda-toolkit nvidia-cublas "
+			"nvidia-cuda-cupti nvidia-cuda-nvrtc nvidia-cuda-runtime nvidia-cudnn-cu13 "
+			"nvidia-cufft nvidia-cufile nvidia-curand nvidia-cusolver nvidia-cusparse "
+			"nvidia-cusparselt-cu13 nvidia-nccl-cu13 nvidia-nvjitlink nvidia-nvshmem-cu13 "
+			"nvidia-nvtx triton || true",
+			'STACKGLYEMBED_DEPS_INSTALLED'
+		).addCommand(
+			f"mkdir -p {proteinbertDir} {hfCacheDir} && "
+			f"{cls.getEnvActivationCommand(STACKGLYEMBED_DIC)} && "
+			f"{primeProteinBertCmd} && {primeHfCmd}",
+			'STACKGLYEMBED_INSTALLED'
+		).addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
+	def addNetCleavePackage(cls, env, default=True):
+		home = cls.getVar(NETCLEAVE_DIC['home'])
+
+		installer = InstallHelper(NETCLEAVE_DIC['name'], packageHome=home,
+															packageVersion=NETCLEAVE_DIC['version'])
+
+		# Installed from NetCleave's own requirements.txt, a strict superset of
+		# what this protocol needs, so a future upstream pin change is picked
+		# up automatically.
+		#
+		# Clone BEFORE creating the conda env: 'InstallHelper.addCommand'
+		# writes its completion marker directly inside 'packageHome', and
+		# 'getCondaEnvCommand' is itself one such call, so running it first
+		# leaves a marker in 'home' and the subsequent 'git clone' fails with
+		# 'destination path already exists and is not an empty directory'.
+		installer.addCommand(
+			f"git clone --depth 1 {NETCLEAVE_UPSTREAM_URL} {home}",
+			'NETCLEAVE_CLONED'
+		).getCondaEnvCommand(
+			NETCLEAVE_DIC['name'], binaryVersion=NETCLEAVE_DIC['version'], pythonVersion='3.10'
+		).addCommand(
+			f"{cls.getEnvActivationCommand(NETCLEAVE_DIC)} && "
+			f"cd {home} && pip install -r requirements.txt",
+			'NETCLEAVE_INSTALLED'
+		).addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
+	def addIApredPackage(cls, env, default=True):
+		home = cls.getVar(IAPRED_DIC['home'])
+
+		installer = InstallHelper(IAPRED_DIC['name'], packageHome=home,
+															packageVersion=IAPRED_DIC['version'])
+
+		# Installed from IApred's own requirements.txt so a future upstream pin
+		# change is picked up automatically, but that file genuinely
+		# under-declares its runtime dependencies: 'imbalanced-learn' is
+		# commented out in it and matplotlib/seaborn are not listed at all,
+		# even though its own functions.py imports all three. Those three are
+		# installed as a supplementary step, not as a replacement.
+		#
+		# Clone BEFORE creating the conda env, for the same reason as ScanNet:
+		# 'getCondaEnvCommand' leaves its own completion marker inside 'home',
+		# which then blocks a subsequent 'git clone' into that same
+		# now-nonempty directory.
+		installer.addCommand(
+			f"git clone --depth 1 {IAPRED_UPSTREAM_URL} {home}",
+			'IAPRED_CLONED'
+		).getCondaEnvCommand(
+			IAPRED_DIC['name'], binaryVersion=IAPRED_DIC['version'], pythonVersion='3.10'
+		).addCommand(
+			f"{cls.getEnvActivationCommand(IAPRED_DIC)} && "
+			f"cd {home} && pip install -r requirements.txt && "
+			"pip install imbalanced-learn matplotlib seaborn",
+			'IAPRED_INSTALLED'
+		).addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
 	def addScanNetPackage(cls, env, default=True):
 		home = cls.getVar(SCANNET_DIC['home'])
 
@@ -381,6 +666,67 @@ class Plugin(pwchemPlugin):
 		).addPackage(env, dependencies=['conda', 'git'], default=default)
 
 	@classmethod
+	def validateStackGlyEmbedInstallation(cls):
+		errors = []
+
+		modelsDir = cls.getStackGlyEmbedModelsDir()
+		if not os.path.isdir(modelsDir):
+			errors.append(f"Could not find the 'prediction/' folder under STACKGLYEMBED_HOME: '{modelsDir}'.")
+
+		proteinbertDump = os.path.join(cls.getStackGlyEmbedProteinBertDir(), 'default.pkl')
+		if not os.path.isfile(proteinbertDump):
+			errors.append(f"ProteinBERT model dump not found: '{proteinbertDump}'.")
+
+		hfCacheDir = cls.getStackGlyEmbedHfCacheDir()
+		if not os.path.isdir(hfCacheDir) or not os.listdir(hfCacheDir):
+			errors.append(f"ESM-2/ProtT5 HuggingFace cache is empty: '{hfCacheDir}'.")
+
+		if not errors and not cls.checkCallEnv(
+				STACKGLYEMBED_DIC, 'import torch, tensorflow, transformers, proteinbert'):
+			errors.append("Activation of the StackGlyEmbed conda environment failed.")
+
+		if errors:
+			errors.append(STACKGLYEMBED_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
+	def validateNetCleaveInstallation(cls):
+		errors = []
+		scriptPath = cls.getNetCleaveScriptPath()
+		if not os.path.isfile(scriptPath):
+			errors.append(f"Could not find 'NetCleave.py' under NETCLEAVE_HOME: '{cls.getNetCleaveDir()}'.")
+		elif not cls.checkCallEnv(NETCLEAVE_DIC, 'import tensorflow'):
+			errors.append("Activation of the NetCleave conda environment failed.")
+		if errors:
+			errors.append(NETCLEAVE_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
+	def validateIApredInstallation(cls):
+		errors = []
+		scriptPath = cls.getIApredScriptPath()
+		home = cls.getIApredDir()
+		if not os.path.isfile(scriptPath):
+			errors.append(f"Could not find '{cls.getVar(IAPRED_DIC['script_name'])}' under IAPRED_HOME: '{home}'.")
+		elif not os.path.isdir(os.path.join(home, 'models')):
+			errors.append(f"Could not find the 'models/' folder under IAPRED_HOME: '{home}'.")
+		elif not cls.checkCallEnv(IAPRED_DIC, 'import sklearn'):
+			errors.append("Activation of the IApred conda environment failed.")
+		if errors:
+			errors.append(IAPRED_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
+	def validateEpiDopeInstallation(cls):
+		errors = []
+		binaryPath = cls.getEpiDopeBinaryPath()
+		if not os.path.isfile(binaryPath):
+			errors.append(f"Could not find the 'epidope' entry point under EPIDOPE_HOME: '{binaryPath}'.")
+		if errors:
+			errors.append(EPIDOPE_NOINSTALL_WARNING)
+		return errors
+
+	@classmethod
 	def validateScanNetInstallation(cls):
 		errors = []
 		home = cls.getScanNetDir()
@@ -453,7 +799,47 @@ class Plugin(pwchemPlugin):
 		except subprocess.CalledProcessError:
 			return False
 
-	# ---------------------------------- Utils (ScanNet/DiscoTope/TMbed/SignalP) --
+	# ---------------------------------- Utils (EpiDope/ScanNet/DiscoTope/TMbed/SignalP) --
+
+	@classmethod
+	def getStackGlyEmbedDir(cls):
+		return cls.getVar(STACKGLYEMBED_DIC['home'])
+
+	@classmethod
+	def getStackGlyEmbedModelsDir(cls):
+		return os.path.join(cls.getStackGlyEmbedDir(), 'prediction')
+
+	@classmethod
+	def getStackGlyEmbedProteinBertDir(cls):
+		return os.path.join(cls.getStackGlyEmbedDir(), '.proteinbert_models')
+
+	@classmethod
+	def getStackGlyEmbedHfCacheDir(cls):
+		return os.path.join(cls.getStackGlyEmbedDir(), '.hf_cache')
+
+	@classmethod
+	def getStackGlyEmbedT5ModelName(cls):
+		return STACKGLYEMBED_DEFAULT_T5_MODEL_NAME
+
+	@classmethod
+	def getNetCleaveDir(cls):
+		return cls.getVar(NETCLEAVE_DIC['home'])
+
+	@classmethod
+	def getNetCleaveScriptPath(cls):
+		return os.path.join(cls.getNetCleaveDir(), 'NetCleave.py')
+
+	@classmethod
+	def getIApredDir(cls):
+		return cls.getVar(IAPRED_DIC['home'])
+
+	@classmethod
+	def getIApredScriptPath(cls):
+		return os.path.join(cls.getIApredDir(), cls.getVar(IAPRED_DIC['script_name']))
+
+	@classmethod
+	def getEpiDopeBinaryPath(cls):
+		return os.path.join(cls.getVar(EPIDOPE_DIC['home']), 'bin', 'epidope')
 
 	@classmethod
 	def getScanNetDir(cls):
@@ -490,7 +876,44 @@ class Plugin(pwchemPlugin):
 			return None
 		return os.path.join(os.path.dirname(pythonBin), cls.getVar(SIGNALP_DIC['binary_name']))
 
-	# ---------------------------------- Protocol functions (ScanNet/DiscoTope/TMbed) --
+	# ---------------------------------- Protocol functions (EpiDope/ScanNet/DiscoTope/TMbed) --
+
+	@classmethod
+	def runStackGlyEmbed(cls, protocol, scriptPath, args, cwd=None):
+		# HF_HOME is set on os.environ directly and no explicit 'env' override
+		# is passed, the same pattern DiscoTope uses for TORCH_HOME: passing
+		# env=cls.getEnviron() would risk silently dropping HF_HOME rather
+		# than failing loudly.
+		os.environ['HF_HOME'] = cls.getStackGlyEmbedHfCacheDir()
+		activation = cls.getVar(STACKGLYEMBED_DIC['activation'])
+		fullProgram = f'{activation} && python {scriptPath}'
+		protocol.runJob(fullProgram, args, cwd=cwd)
+
+	@classmethod
+	def runNetCleave(cls, protocol, args, cwd=None):
+		# NetCleave.py resolves its bundled model path relative to the process
+		# cwd, not to its own location: the caller must pass
+		# cwd=getNetCleaveDir().
+		activation = cls.getVar(NETCLEAVE_DIC['activation'])
+		fullProgram = f'{activation} && python {cls.getNetCleaveScriptPath()}'
+		protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+
+	@classmethod
+	def runIApred(cls, protocol, args, cwd=None):
+		# IApred.py resolves its own 'models_folder = "models"' relative to the
+		# process cwd, not to the script's location: the caller must pass
+		# cwd=getIApredDir().
+		activation = cls.getVar(IAPRED_DIC['activation'])
+		fullProgram = f'{activation} && python {cls.getIApredScriptPath()}'
+		protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+
+	@classmethod
+	def runEpiDope(cls, protocol, args, cwd=None):
+		# EpiDope's 'epidope' entry point is a self-contained shim whose shebang
+		# already points at its own environment's interpreter: it must NOT be
+		# wrapped in a conda activation command, which produced intermittent
+		# spurious failures with piped stdout/stderr.
+		protocol.runJob(cls.getEpiDopeBinaryPath(), args, env=cls.getEnviron(), cwd=cwd)
 
 	@classmethod
 	def runScanNet(cls, protocol, args, cwd=None):

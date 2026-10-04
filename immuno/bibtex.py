@@ -25,6 +25,40 @@
 # *
 # **************************************************************************
 _bibtexStr = """
+@article{Collatz2021,
+  title = {EpiDope: a deep neural network for linear B-cell epitope prediction},
+  author = {Collatz, Maximilian and Mock, Florian and Barth, Emanuel and H{\\"o}lzer, Martin and Sachse, Konrad and Marz, Manja},
+  journal = {Bioinformatics},
+  volume = {37},
+  number = {4},
+  pages = {448--455},
+  year = {2021},
+  doi = {10.1093/bioinformatics/btaa773}
+}
+@article{AmengualRigo2021,
+  title = {NetCleave: an open-source algorithm for predicting C-terminal antigen processing for MHC-I and MHC-II},
+  author = {Amengual-Rigo, Pep and Guallar, Victor},
+  journal = {Scientific Reports},
+  volume = {11},
+  pages = {13126},
+  year = {2021},
+  doi = {10.1038/s41598-021-92632-y}
+}
+@article{Nafi2025,
+  title = {StackGlyEmbed: prediction of N-linked glycosylation sites using protein language models},
+  author = {Nafi, Md Muhaiminul Islam and Rahman, M Saifur},
+  journal = {Bioinformatics Advances},
+  volume = {5},
+  number = {1},
+  pages = {vbaf146},
+  year = {2025},
+  doi = {10.1093/bioadv/vbaf146}
+}
+@article{Miles2025,
+  title = {IApred: A versatile open-source tool for predicting protein antigenicity across diverse pathogens},
+  author = {Miles, Sebastian and Menafra, Gonzalo and Iriarte, Andres and Chabalgoity, Jose Alejandro},
+  year = {2025}
+}
 @article{Tubiana2022,
   title = {ScanNet: an interpretable geometric deep learning model for structure-based protein binding site prediction},
   author = {Tubiana, Jerome and Schneidman-Duhovny, Dina and Wolfson, Haim J.},

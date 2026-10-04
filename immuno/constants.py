@@ -184,11 +184,46 @@ EVALSUM = '''1) "ToxinPred3-1": {'software': 'ToxinPred3', 'toxinMethod': 'Machi
 
 # ============================================================================
 # Conformational/structure-based and sequence-based B-cell epitope predictors
-# folded in from their own standalone plugins (scipion-chem-scannet,
-# scipion-chem-discotope, scipion-chem-tmbed, scipion-chem-signalp):
-# small, easily-installable programs belong in scipion-chem-immuno rather
-# than in their own dedicated plugin.
+# folded in here from their own standalone plugins (scipion-chem-scannet,
+# scipion-chem-discotope, scipion-chem-tmbed, scipion-chem-signalp) and, in
+# EpiDope's case, from scipion-chem core: small, easily-installable programs
+# belong in scipion-chem-immuno rather than in their own dedicated plugin,
+# and a predictor that ships its own binary does not belong in the core.
 # ============================================================================
+
+# EpiDope (Collatz et al. 2021) predicts LINEAR (sequence-based) B-cell
+# epitopes from per-residue scores. Installed automatically by cloning the
+# upstream repo and creating its conda environment exactly from the
+# epidope.yml it ships: it pins an old, fragile stack (Python 3.6,
+# TensorFlow 1.13, ELMo/AllenNLP), so the environment is built directly at
+# EPIDOPE_HOME via '-p' to give downstream code a stable
+# '<EPIDOPE_HOME>/bin/epidope' path regardless of where conda keeps its
+# named environments.
+EPIDOPE_DIC = {
+    'name': 'epidope',
+    'version': '1.0',
+    'home': 'EPIDOPE_HOME',
+}
+
+EPIDOPE_UPSTREAM_URL = 'https://github.com/rnajena/EpiDope'
+
+# Score cut-off carried over from this project's own validated EpiDope runs.
+EPIDOPE_DEFAULT_THRESHOLD = 0.818
+
+EPIDOPE_NOINSTALL_WARNING = (
+    'Installation could not be completed because the local EpiDope '
+    'installation has not been found. Run \'scipion3 installb epidope\' to '
+    'install it automatically. Please check the plugin README file for more '
+    f'details: {EPIDOPE_UPSTREAM_URL}'
+)
+
+# Raw output columns, one row per residue, in the per-accession CSV EpiDope
+# writes to '<outdir>/epidope/<accession>.csv' (confirmed reading EpiDope's
+# own epidope2.py::output_results).
+EPIDOPE_RAW_COLUMNS = ('position', 'aminoacid', 'score')
+EPIDOPE_ACCESSION_COLUMN = 'Accession'
+EPIDOPE_RESIDUE_COLUMN = 'Residue'
+EPIDOPE_SCORE_COLUMN = 'EpiDope score'
 
 # ScanNet (Tubiana, Schneidman-Duhovny & Wolfson 2022, Apache-2.0) predicts
 # CONFORMATIONAL (structure-based) B-cell epitopes. Installed automatically
@@ -336,3 +371,137 @@ CONSTRUCT_LINKER_ADJUVANT = 'EAAAK'   # optional adjuvant linker (Arai et al. 20
 # real GP120 run produced 18 valid HTL candidates alone, too many for a
 # manageable construct.
 CONSTRUCT_DEFAULT_TOP_N_PER_CLASS = 3
+
+# ============================================================================
+# Whole-sequence annotators folded in from their own standalone plugins
+# (scipion-chem-iapred, scipion-chem-netcleave, scipion-chem-stackglyembed).
+# All three annotate, they never filter: the decision of what to discard
+# belongs to the workflow, not to an individual evaluation protocol.
+# ============================================================================
+
+# IApred (Miles et al. 2025) scores whole-protein intrinsic antigenicity
+# with an SVM over aggregated physicochemical features. It replaces
+# VaxiJen, the historical reference for this task, which is not
+# open-source and offers neither a downloadable standalone binary nor a
+# documented public API. Installed automatically by cloning the upstream
+# repository, whose pretrained SVM model comes along with the clone, into
+# a dedicated conda environment.
+IAPRED_DIC = {
+    'name': 'IApred',
+    'version': DEFAULT_VERSION,
+    'home': 'IAPRED_HOME',
+    'activation': 'IAPRED_ACTIVATION_CMD',
+    'script_name': 'IAPRED_SCRIPT_NAME',
+}
+
+IAPRED_UPSTREAM_URL = 'https://github.com/sebamiles/IApred'
+IAPRED_DEFAULT_SCRIPT_NAME = 'IApred.py'
+
+IAPRED_NOINSTALL_WARNING = (
+    'Installation could not be completed because the local IApred '
+    'installation has not been found or its conda environment could not be '
+    "activated. Run 'scipion3 installb IApred' to install it automatically. "
+    'Please check the plugin README file for more details: '
+    f'{IAPRED_UPSTREAM_URL}'
+)
+
+# IApred.py has a real, undocumented limitation, confirmed by reading the
+# upstream script rather than assumed: for sequences shorter than 20 aa it
+# writes the literal text 'Sequence too short' in the score column instead
+# of a number, and 'N/A' in the category column. An assembled
+# multi-epitope construct is normally well over 20 aa, but a single short
+# B-cell candidate can hit it.
+IAPRED_MIN_SEQUENCE_LENGTH = 20
+IAPRED_TOO_SHORT_CATEGORY = f'Not evaluated (sequence < {IAPRED_MIN_SEQUENCE_LENGTH} aa)'
+
+# NetCleave (Amengual-Rigo et al. 2021) predicts C-terminal proteasomal
+# cleavage, the antigen-processing step that decides whether an MHC-I
+# binder is ever actually generated. Installed automatically by cloning
+# the upstream repository, whose bundled pretrained model
+# (data/models/I_mass-spectrometry_HLA/) comes along with the clone, into
+# a dedicated conda environment for its tensorflow/keras/scikit-learn
+# stack.
+#
+# Licensing caveat: the upstream repository carries NO LICENSE file at
+# all, confirmed against the repository itself rather than assumed. It is
+# installed anyway, as is common for academic research code published
+# alongside a paper, but this is a judgment call and not a
+# license-cleared certainty.
+NETCLEAVE_DIC = {
+    'name': 'NetCleave',
+    'version': DEFAULT_VERSION,
+    'home': 'NETCLEAVE_HOME',
+    'activation': 'NETCLEAVE_ACTIVATION_CMD',
+}
+
+NETCLEAVE_UPSTREAM_URL = 'https://github.com/pepamengual/NetCleave'
+
+NETCLEAVE_NOINSTALL_WARNING = (
+    'Installation could not be completed because the local NetCleave '
+    'installation has not been found or its conda environment could not be '
+    "activated. Run 'scipion3 installb NetCleave' to install it "
+    'automatically. Please check the plugin README file for more details: '
+    f'{NETCLEAVE_UPSTREAM_URL}'
+)
+
+# The bundled pretrained model (mass spectrometry, MHC-I, generic HLA
+# family) ships inside the cloned repository. NetCleave.py resolves it as
+# 'data/models/{mhc_class}_{technique}_{mhc_family}' RELATIVE TO THE
+# PROCESS CWD, not to its own directory, so these three values must match
+# that folder name exactly and the caller must run it with
+# cwd=getNetCleaveDir(). The model is only ever scored against via
+# --score_fasta, never retrained at runtime.
+NETCLEAVE_MHC_CLASS = 'I'
+NETCLEAVE_TECHNIQUE = 'mass_spectrometry'
+NETCLEAVE_MHC_FAMILY = 'HLA'
+
+# CORRECTED: the previous 'MIT license' claim here was WRONG,
+# never actually verified -- the real upstream repo (nafcoder/StackGlyEmbed)
+# has NO LICENSE file at all (confirmed via 'gh api': the repo's 'license'
+# field is null, no LICENSE-named file in its root). No explicit open-source
+# license means no formal redistribution/reuse permission is granted by
+# default under copyright law, though this is a common (if technically
+# ambiguous) situation for academic research code shared on GitHub
+# alongside a paper. Auto-cloning it is a judgment call, not a
+# license-cleared certainty like the other five auto-installed tools in
+# this project (all confirmed real OSS licenses) -- flagged for the user
+# to decide, not resolved unilaterally here. The heavy/heterogeneous
+# dependency stack (torch + tensorflow + transformers + protein-bert)
+# itself is still fine for Scipion's conda installer to handle; disk usage
+# alone is not a reason to require a manual install.
+# defineBinaries clones the upstream repo (for the pretrained classifier
+# pickles under prediction/) and pre-warms all three embedding models'
+# weight caches (ProteinBERT, ESM-2, ProtT5) so the protocol runs fully
+# offline afterwards (predict_local.py itself already sets
+# HF_HUB_OFFLINE=1/TRANSFORMERS_OFFLINE=1).
+STACKGLYEMBED_DIC = {
+    'name': 'StackGlyEmbed',
+    'version': DEFAULT_VERSION,
+    'home': 'STACKGLYEMBED_HOME',
+    'activation': 'STACKGLYEMBED_ACTIVATION_CMD',
+    'esm_model_name': 'STACKGLYEMBED_ESM_MODEL_NAME',
+}
+
+STACKGLYEMBED_DEFAULT_ESM_MODEL_NAME = 'facebook/esm2_t33_650M_UR50D'
+# Same encoder as the original repo's 'Rostlab/prot_t5_xl_uniref50', just
+# fp16/no decoder (see predict_local.py's module docstring, point 2).
+STACKGLYEMBED_DEFAULT_T5_MODEL_NAME = 'Rostlab/prot_t5_xl_half_uniref50-enc'
+
+# CORRECTED: the real repo is nafcoder/StackGlyEmbed (verified
+# via 'gh api' -- 'GaryChan-lab/StackGlyEmbed' returns 404, does not
+# exist). 'nafcoder' matches the paper's first author (Nafi).
+STACKGLYEMBED_UPSTREAM_URL = 'https://github.com/nafcoder/StackGlyEmbed'
+
+STACKGLYEMBED_NOINSTALL_WARNING = (
+    'Installation could not be completed because the local StackGlyEmbed '
+    "installation has not been found or its conda environment could not be "
+    "activated. Run 'scipion3 installb StackGlyEmbed' to install it "
+    'automatically. Please check the plugin README file for more details: '
+    f'{STACKGLYEMBED_UPSTREAM_URL}'
+)
+
+# N-glycosylation sequon: Asn-Xaa-[Ser/Thr], Xaa != Pro. Lookahead-based
+# (not a plain finditer) so overlapping sequons are all found (e.g.
+# 'NPNSTPNST' reports N at position 1 AND 7). Returns 1-indexed Asn
+# positions relative to whatever sequence string it is run against.
+STACKGLYEMBED_SEQUON_PATTERN = r'(?=(N[^P][ST]))'
