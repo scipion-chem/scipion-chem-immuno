@@ -28,6 +28,7 @@ This protocol is used to predict intrinsic antigenicity of a full-length
 protein or construct with a local IApred installation.
 """
 
+import math
 from pathlib import Path
 
 from pwchem.objects import SetOfSequenceROIs
@@ -106,9 +107,10 @@ class ProtIApredPrediction(EMProtocol):
 
         outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
         for roi, row in zip(rois, resultDf.itertuples(index=False)):
-            # NaN is the only value that is not equal to itself: that is the
-            # 'sequence too short' case, stored as a null Float.
-            isScored = row.iapred_score == row.iapred_score
+            # The 'sequence too short' case reaches here as NaN (parseOutput
+            # coerces that literal text with pd.to_numeric(errors='coerce')) and
+            # is stored as a null Float.
+            isScored = not math.isnan(row.iapred_score)
             roi._iapredScore = Float(row.iapred_score) if isScored else Float(None)
             roi._iapredCategory = String(row.iapred_category)
             outROIs.append(roi)

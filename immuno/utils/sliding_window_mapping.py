@@ -1,12 +1,24 @@
-"""Generic gap-tolerant sliding-window primitives, shared across the
-per-residue-score-based epitope predictors in this plugin (ScanNet,
-DiscoTope-3.0): each tool's own '<tool>_epitope_mapping.py' wraps these
-with its own residue-grouping shape (ScanNet: per-chain; DiscoTope-3.0:
-single-chain per run) rather than duplicating the sliding-window logic
-itself.
+"""Generic gap-tolerant sliding-window epitope region mapping, shared across
+the per-residue-score-based epitope predictors in this plugin (EpiDope,
+DiscoTope-3.0, ScanNet).
+
+Two shapes of consumer:
+
+* a single sequence/chain per run (EpiDope on a protein sequence,
+  DiscoTope-3.0 on a single-chain PDB) uses
+  :func:`extractLinearEpitopeRegions` directly -- the mapping is identical
+  for both, so neither gets a per-tool wrapper that would only duplicate it;
+* several chains in one run (ScanNet, where a PDB can hold more than one
+  chain) keeps its own 'scannet_epitope_mapping.py' wrapper, because the
+  per-chain grouping is real tool-specific shape and not a copy of the
+  sliding-window logic.
 """
 
 from typing import List, Tuple
+
+import pandas as pd
+
+REGION_COLUMNS = ['start', 'end', 'length', 'mean_score', 'max_score', 'sequence']
 
 
 def findValidWindows(
@@ -46,3 +58,41 @@ def mergeOverlappingWindows(windows: List[Tuple[int, int]]) -> List[Tuple[int, i
         else:
             merged.append((start, end))
     return merged
+
+
+def extractLinearEpitopeRegions(
+    scores: List[float], residues: List[str], threshold: float, minLength: int,
+    windowSize: int, maxGapResidues: int,
+) -> pd.DataFrame:
+    """Maps epitope regions with a gap-tolerant sliding window over ONE sequence.
+
+    Used as-is by EpiDope (per-residue score of a protein sequence) and by
+    DiscoTope-3.0 (per-residue 'calibrated_score' of a single-chain PDB).
+    Residue position is derived from list order (1-indexed), never from a
+    tool's own position column.
+
+    Returns:
+        DataFrame with columns ``start``, ``end``, ``length``,
+        ``mean_score``, ``max_score``, ``sequence``.
+    """
+    validWindows = findValidWindows(scores, threshold, windowSize, maxGapResidues)
+    mergedRegions = mergeOverlappingWindows(validWindows)
+
+    records = []
+    for start, end in mergedRegions:
+        length = end - start + 1
+        if length < minLength:
+            continue
+
+        blockScores = scores[start: end + 1]
+        blockResidues = residues[start: end + 1]
+        records.append({
+            'start': start + 1,
+            'end': end + 1,
+            'length': length,
+            'mean_score': sum(blockScores) / len(blockScores),
+            'max_score': max(blockScores),
+            'sequence': ''.join(blockResidues),
+        })
+
+    return pd.DataFrame.from_records(records, columns=REGION_COLUMNS)

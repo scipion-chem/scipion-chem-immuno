@@ -45,8 +45,8 @@ from ..constants import (
     DISCOTOPE_RAW_RESIDUE_COLUMN as RAW_RESIDUE_COLUMN,
     DISCOTOPE_RAW_SCORE_COLUMN as RAW_SCORE_COLUMN,
 )
-from ..utils.discotope_epitope_mapping import extractEpitopeRegions
 from ..utils.discotope_exceptions import DiscoTopeExecutionError
+from ..utils.sliding_window_mapping import extractLinearEpitopeRegions
 
 
 class ProtDiscoTopePrediction(EMProtocol):
@@ -174,7 +174,7 @@ class ProtDiscoTopePrediction(EMProtocol):
             return
 
         chainSeq = ''.join(rawDf[RAW_RESIDUE_COLUMN].astype(str))
-        regionsDf = extractEpitopeRegions(
+        regionsDf = extractLinearEpitopeRegions(
             scores=rawDf[RAW_SCORE_COLUMN].tolist(), residues=rawDf[RAW_RESIDUE_COLUMN].astype(str).tolist(),
             threshold=self.threshold.get(), minLength=self.minLength.get(),
             windowSize=self.windowSize.get(), maxGapResidues=self.maxGapResidues.get(),

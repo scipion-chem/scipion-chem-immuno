@@ -50,8 +50,8 @@ def buildDataset(parentSites: Dict[str, List[int]], datasetPath: Path) -> List[T
     order: List[Tuple[str, int]] = []
     with open(datasetPath, 'w') as fh:
         for i, (seq, sites) in enumerate(parentSites.items()):
-            protein_id = f'protein_{i}'
-            fh.write(f'{protein_id},' + ','.join(str(s) for s in sites) + '\n')
+            proteinId = f'protein_{i}'
+            fh.write(f'{proteinId},' + ','.join(str(s) for s in sites) + '\n')
             fh.write(f'{seq}\n')
             order.extend((seq, s) for s in sites)
     return order

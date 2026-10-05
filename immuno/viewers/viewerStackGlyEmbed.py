@@ -39,7 +39,7 @@ from ..protocols import ProtStackGlyEmbedPrediction
 
 # Matches one ';'-joined entry from ProtStackGlyEmbedPrediction.createOutputStep:
 # '{pos}:{verdict}({score:.3f})' or '{pos}:{verdict}' (no score) when not evaluated.
-_SITE_RE = re.compile(r'(\d+):([^(;]+?)(?:\(([\d.]+)\))?(?:;|$)')
+_SITE_RE = re.compile(r'(\d+):([^(;]+)(?:\(([\d.]+)\))?(?:;|$)')
 
 VERDICT_COLORS = {
     'Glycosylated': 'tab:green',

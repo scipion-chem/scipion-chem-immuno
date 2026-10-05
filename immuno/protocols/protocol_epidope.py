@@ -43,8 +43,8 @@ from ..constants import (
     EPIDOPE_RESIDUE_COLUMN as RESIDUE_COLUMN,
     EPIDOPE_SCORE_COLUMN as SCORE_COLUMN,
 )
-from ..utils.epidope_epitope_mapping import extractEpitopeRegions
 from ..utils.epidope_utils import loadRawScores
+from ..utils.sliding_window_mapping import extractLinearEpitopeRegions
 
 
 class ProtEpiDopePrediction(EMProtocol):
@@ -121,7 +121,7 @@ class ProtEpiDopePrediction(EMProtocol):
             return
 
         residues = rawDf[RESIDUE_COLUMN].astype(str).tolist()
-        regionsDf = extractEpitopeRegions(
+        regionsDf = extractLinearEpitopeRegions(
             scores=rawDf[SCORE_COLUMN].tolist(), residues=residues,
             threshold=self.threshold.get(), minLength=self.minLength.get(),
             windowSize=self.windowSize.get(), maxGapResidues=self.maxGapResidues.get(),

@@ -38,6 +38,9 @@ Changes vs. the original:
    pickles in ``./base_layer_pickle_files/`` in the original): allows
    multiple concurrent/successive invocations without clobbering each other
    or depending on a specific external clone's directory as cwd.
+   ``--dataset`` and ``--output-dir`` are confined to the working directory
+   (see :func:`resolveInsideWorkingDir`), which under Scipion is the project
+   directory the protocol's ``runJob`` passes as cwd.
 
 5. **ProteinBERT's global embedding is computed ONCE per protein** (outside
    the site loop), not once per candidate site as in the original
@@ -76,24 +79,24 @@ _WINDOW_SIZE = 15
 _DEFAULT_ESM_MODEL = "facebook/esm2_t33_650M_UR50D"
 
 
-def _get_model_with_global_embedding_as_outputs(model):
+def getModelWithGlobalEmbeddingAsOutputs(model):
     """Rebuilds the ProteinBERT model to expose the global embedding (see original README/extractFeatures.py)."""
-    global_layers = [
+    globalLayers = [
         layer.output
         for layer in model.layers
         if len(layer.output.shape) == 2 and layer.name in ["global-merge2-norm-block6"]
     ]
-    concatenated = keras.layers.Concatenate(name="last-Window-layers")(global_layers)
+    concatenated = keras.layers.Concatenate(name="last-Window-layers")(globalLayers)
     return keras.models.Model(inputs=model.inputs, outputs=concatenated)
 
 
-def _get_proteinbert_representation(pretrained_model_generator, input_encoder, seq: str) -> np.ndarray:
-    encoded_x = input_encoder.encode_X([seq], len(seq) + 2)
-    model = _get_model_with_global_embedding_as_outputs(pretrained_model_generator.create_model(len(seq) + 2))
-    return np.array(model.predict(encoded_x, batch_size=2))[0]
+def getProteinbertRepresentation(pretrainedModelGenerator, inputEncoder, seq: str) -> np.ndarray:
+    encodedX = inputEncoder.encode_X([seq], len(seq) + 2)
+    model = getModelWithGlobalEmbeddingAsOutputs(pretrainedModelGenerator.create_model(len(seq) + 2))
+    return np.array(model.predict(encodedX, batch_size=2))[0]
 
 
-def _get_esm2_embedding(tokenizer, model, seq: str) -> np.ndarray:
+def getEsm2Embedding(tokenizer, model, seq: str) -> np.ndarray:
     """Per-residue ESM-2 embedding (last-layer representations, no CLS/EOS)."""
     chunks = [seq[i : i + 1024] for i in range(0, len(seq), 1024)]
     final = np.zeros((1, model.config.hidden_size))
@@ -106,7 +109,7 @@ def _get_esm2_embedding(tokenizer, model, seq: str) -> np.ndarray:
     return np.delete(final, 0, axis=0)
 
 
-def _get_prott5_embedding(tokenizer, model, seq: str) -> np.ndarray:
+def getProtT5Embedding(tokenizer, model, seq: str) -> np.ndarray:
     """Per-residue ProtT5 embedding (same 8797 aa chunking as the original script)."""
     chunks = [seq[i : i + 8797] for i in range(0, len(seq), 8797)]
     final = np.zeros((1, model.config.d_model))
@@ -120,93 +123,116 @@ def _get_prott5_embedding(tokenizer, model, seq: str) -> np.ndarray:
     return np.delete(final, 0, axis=0)
 
 
-def extract_features(dataset_path: Path, output_dir: Path, t5_model_path: str, esm_model_name: str,
-                      proteinbert_dir: str = None) -> Path:
+def resolveInsideWorkingDir(rawPath: Path, argName: str) -> Path:
+    """Canonicalizes a path given on the command line and keeps it inside the cwd.
+
+    ``--dataset`` and ``--output-dir`` are the only two paths this script reads
+    from / writes to on its caller's behalf. Under Scipion both arrive relative
+    to the project directory, which is the cwd ``runJob`` hands over (e.g.
+    ``Runs/<runId>_ProtStackGlyEmbedPrediction/extra``), so anchoring them there
+    matches the real caller exactly while stopping a ``..`` sequence from
+    reaching ``mkdir()`` or ``read_text()`` outside the project.
+
+    The weight/model paths (``--models-dir``, ``--proteinbert-dir``,
+    ``--t5-model-path``) are plugin installation paths, not per-run caller
+    input, and live outside the project on purpose: they are NOT confined here.
+    """
+    root = os.path.realpath(os.getcwd())
+    resolved = os.path.realpath(os.path.join(root, str(rawPath)))
+    if resolved != root and not resolved.startswith(root + os.sep):
+        raise ValueError(
+            f"{argName} must stay inside the working directory '{root}', got '{rawPath}'"
+        )
+    return Path(resolved)
+
+
+def extractFeatures(datasetPath: Path, outputDir: Path, t5ModelPath: str, esmModelName: str,
+                    proteinbertDir: str = None) -> Path:
     """Generates ``features.csv`` (ProteinBERT + ESM-2 + ProtT5) for each site in ``dataset.txt``."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    outputDir.mkdir(parents=True, exist_ok=True)
 
     proteinbertKwargs = {"download_model_dump_if_not_exists": False}
-    if proteinbert_dir:
-        proteinbertKwargs["local_model_dump_dir"] = proteinbert_dir
-    print(f"Loading ProteinBERT (local, {proteinbert_dir or '~/proteinbert_models'}/default.pkl)...", flush=True)
-    pretrained_model_generator, input_encoder = load_pretrained_model(**proteinbertKwargs)
+    if proteinbertDir:
+        proteinbertKwargs["local_model_dump_dir"] = proteinbertDir
+    print(f"Loading ProteinBERT (local, {proteinbertDir or '~/proteinbert_models'}/default.pkl)...", flush=True)
+    pretrainedModelGenerator, inputEncoder = load_pretrained_model(**proteinbertKwargs)
 
-    print(f"Loading ESM-2 650M ({esm_model_name}, offline local)...", flush=True)
-    esm_tokenizer = AutoTokenizer.from_pretrained(esm_model_name)
-    esm_model = EsmModel.from_pretrained(esm_model_name).eval()
+    print(f"Loading ESM-2 650M ({esmModelName}, offline local)...", flush=True)
+    esmTokenizer = AutoTokenizer.from_pretrained(esmModelName)
+    esmModel = EsmModel.from_pretrained(esmModelName).eval()
 
-    print(f"Loading ProtT5 ({t5_model_path}, offline local)...", flush=True)
-    t5_tokenizer = T5Tokenizer.from_pretrained(t5_model_path, do_lower_case=False)
-    t5_model = T5EncoderModel.from_pretrained(t5_model_path).eval()
+    print(f"Loading ProtT5 ({t5ModelPath}, offline local)...", flush=True)
+    t5Tokenizer = T5Tokenizer.from_pretrained(t5ModelPath, do_lower_case=False)
+    t5Model = T5EncoderModel.from_pretrained(t5ModelPath).eval()
 
-    lines = dataset_path.read_text().splitlines()
+    lines = datasetPath.read_text().splitlines()
 
-    proteinbert_rows, esm_rows, t5_rows = [], [], []
+    proteinbertRows, esmRows, t5Rows = [], [], []
     for i in range(0, len(lines), 2):
         header = lines[i].split(",")
-        protein_id = header[0]
+        proteinId = header[0]
         positions = [int(p) for p in header[1:]]
         seq = lines[i + 1]
 
-        print(f"[{protein_id}] {len(positions)} candidate site(s), {len(seq)} aa", flush=True)
-        pb_full = _get_proteinbert_representation(pretrained_model_generator, input_encoder, seq)
-        esm_full = _get_esm2_embedding(esm_tokenizer, esm_model, seq)
-        t5_full = _get_prott5_embedding(t5_tokenizer, t5_model, seq)
+        print(f"[{proteinId}] {len(positions)} candidate site(s), {len(seq)} aa", flush=True)
+        pbFull = getProteinbertRepresentation(pretrainedModelGenerator, inputEncoder, seq)
+        esmFull = getEsm2Embedding(esmTokenizer, esmModel, seq)
+        t5Full = getProtT5Embedding(t5Tokenizer, t5Model, seq)
 
         for pos in positions:
-            proteinbert_rows.append(pb_full)
+            proteinbertRows.append(pbFull)
             start = max(pos - _WINDOW_SIZE - 1, 0)
             end = min(pos + _WINDOW_SIZE, len(seq))
-            esm_rows.append(np.mean(esm_full[start:end, :], axis=0))
-            t5_rows.append(t5_full[pos - 1])
+            esmRows.append(np.mean(esmFull[start:end, :], axis=0))
+            t5Rows.append(t5Full[pos - 1])
 
-    features = np.concatenate([np.array(proteinbert_rows), np.array(esm_rows), np.array(t5_rows)], axis=1)
-    features_path = output_dir / "features.csv"
-    np.savetxt(features_path, features, delimiter=",")
-    return features_path
+    features = np.concatenate([np.array(proteinbertRows), np.array(esmRows), np.array(t5Rows)], axis=1)
+    featuresPath = outputDir / "features.csv"
+    np.savetxt(featuresPath, features, delimiter=",")
+    return featuresPath
 
 
-def _preprocess(feature_x: np.ndarray, stage: int, models_dir: Path) -> np.ndarray:
-    with open(models_dir / f"power_transformer_{stage}.sav", "rb") as f:
+def preprocess(featureX: np.ndarray, stage: int, modelsDir: Path) -> np.ndarray:
+    with open(modelsDir / f"power_transformer_{stage}.sav", "rb") as f:
         pt = pickle.load(f)
-    return pt.transform(feature_x)
+    return pt.transform(featureX)
 
 
-def _base_layer_predictions(feature_x: np.ndarray, models_dir: Path) -> np.ndarray:
-    test_x = _preprocess(feature_x, 2, models_dir)
-    total = np.zeros((len(test_x), 1), dtype=float)
-    pickle_dir = models_dir / "base_layer_pickle_files"
+def baseLayerPredictions(featureX: np.ndarray, modelsDir: Path) -> np.ndarray:
+    testX = preprocess(featureX, 2, modelsDir)
+    total = np.zeros((len(testX), 1), dtype=float)
+    pickleDir = modelsDir / "base_layer_pickle_files"
 
     for i in range(10):
-        for base_classifier in ("SVM", "XGB", "KNN"):
-            with open(pickle_dir / f"{base_classifier}_base_layer_{i}.sav", "rb") as f:
+        for baseClassifier in ("SVM", "XGB", "KNN"):
+            with open(pickleDir / f"{baseClassifier}_base_layer_{i}.sav", "rb") as f:
                 model = pickle.load(f)
-            y_proba = model.predict_proba(test_x)[:, 1].reshape(-1, 1)
-            total = np.concatenate((total, y_proba), axis=1)
+            yProba = model.predict_proba(testX)[:, 1].reshape(-1, 1)
+            total = np.concatenate((total, yProba), axis=1)
 
     return np.delete(total, 0, axis=1)
 
 
-def predict(features_path: Path, output_dir: Path, models_dir: Path) -> Path:
+def predict(featuresPath: Path, outputDir: Path, modelsDir: Path) -> Path:
     """Applies the already-trained classifier stack (base layer + meta-SVM), unmodified."""
-    feature_x = np.loadtxt(features_path, delimiter=",")
-    if feature_x.ndim == 1:
-        feature_x = feature_x.reshape(1, -1)
+    featureX = np.loadtxt(featuresPath, delimiter=",")
+    if featureX.ndim == 1:
+        featureX = featureX.reshape(1, -1)
 
-    x = _preprocess(feature_x, 1, models_dir)
-    blp = _base_layer_predictions(x, models_dir)
+    x = preprocess(featureX, 1, modelsDir)
+    blp = baseLayerPredictions(x, modelsDir)
     x = np.concatenate((x, blp), axis=1)
-    x = _preprocess(x, 3, models_dir)
+    x = preprocess(x, 3, modelsDir)
 
-    with open(models_dir / "base_layer_pickle_files" / "SVM_meta_layer.sav", "rb") as f:
+    with open(modelsDir / "base_layer_pickle_files" / "SVM_meta_layer.sav", "rb") as f:
         clf = pickle.load(f)
-    y_pred = clf.predict(x)
-    y_proba = clf.predict_proba(x)[:, 1]
+    yPred = clf.predict(x)
+    yProba = clf.predict_proba(x)[:, 1]
 
-    predicted_path = output_dir / "predicted_values.csv"
-    np.savetxt(predicted_path, np.column_stack([y_pred, y_proba]), delimiter=",", fmt="%.6f",
+    predictedPath = outputDir / "predicted_values.csv"
+    np.savetxt(predictedPath, np.column_stack([yPred, yProba]), delimiter=",", fmt="%.6f",
                header="prediction,probability", comments="")
-    return predicted_path
+    return predictedPath
 
 
 def main() -> int:
@@ -221,10 +247,13 @@ def main() -> int:
                          help="Local dir containing ProteinBERT's default.pkl dump (defaults to ~/proteinbert_models if unset)")
     args = parser.parse_args()
 
-    features_path = extract_features(args.dataset, args.output_dir, args.t5_model_path, args.esm_model_name,
-                                      args.proteinbert_dir)
-    predicted_path = predict(features_path, args.output_dir, args.models_dir)
-    print(f"-> Predictions saved to: {predicted_path}")
+    datasetPath = resolveInsideWorkingDir(args.dataset, "--dataset")
+    outputDir = resolveInsideWorkingDir(args.output_dir, "--output-dir")
+
+    featuresPath = extractFeatures(datasetPath, outputDir, args.t5_model_path, args.esm_model_name,
+                                   args.proteinbert_dir)
+    predictedPath = predict(featuresPath, outputDir, args.models_dir)
+    print(f"-> Predictions saved to: {predictedPath}")
     return 0
 
 

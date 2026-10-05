@@ -28,6 +28,7 @@ This protocol is used to predict N-linked glycosylation sequons of a set
 of peptide candidates with a local StackGlyEmbed installation.
 """
 
+import math
 import os
 
 from pwchem.objects import SetOfSequenceROIs
@@ -173,7 +174,10 @@ class ProtStackGlyEmbedPrediction(EMProtocol):
                 verdict, score = resultsBySite.get((parentSeq, pos), ('Not evaluated', float('nan')))
                 if verdict == 'Glycosylated':
                     hasGlyco = True
-                details.append(f'{pos}:{verdict}({score:.3f})' if score == score else f'{pos}:{verdict}')
+                # A sequon with no prediction row arrives as NaN (the .get default
+                # above): it is reported without a score instead of printing 'nan'.
+                hasScore = not math.isnan(score)
+                details.append(f'{pos}:{verdict}({score:.3f})' if hasScore else f'{pos}:{verdict}')
 
             roi._hasGlycoSequon = Boolean(hasGlyco)
             roi._glycoSequonSummary = String(';'.join(details))
