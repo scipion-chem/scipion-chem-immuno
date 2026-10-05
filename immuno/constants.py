@@ -237,14 +237,14 @@ SCANNET_DIC = {
     'activation': 'SCANNET_ACTIVATION_CMD',
 }
 
-SCANNET_READ_URL = 'https://github.com/Lvera-code/scipion-chem-scannet'
+IMMUNO_README_URL = 'https://github.com/scipion-chem/scipion-chem-immuno'
 SCANNET_UPSTREAM_URL = 'https://github.com/jertubiana/ScanNet'
 
 SCANNET_NOINSTALL_WARNING = (
     'Installation could not be completed because the local ScanNet '
     "installation has not been found or its conda environment could not be "
     "activated. Run 'scipion3 installb ScanNet' to install it automatically. "
-    f'Please check the scipion-chem-scannet README file for more details: {SCANNET_READ_URL}'
+    f"Please check this plugin's README file for more details: {IMMUNO_README_URL}"
 )
 
 # Prediction mode is ALWAYS '--mode epitope --noMSA', not configurable: the
@@ -270,15 +270,14 @@ DISCOTOPE_DIC = {
     'activation': 'DISCOTOPE_ACTIVATION_CMD',
 }
 
-DISCOTOPE_READ_URL = 'https://github.com/Lvera-code/scipion-chem-discotope'
 DISCOTOPE_UPSTREAM_URL = 'https://github.com/Magnushhoie/DiscoTope-3.0'
 
 DISCOTOPE_NOINSTALL_WARNING = (
     'Installation could not be completed because the local DiscoTope-3.0 '
     "installation has not been found or its conda environment could not be "
     "activated. Run 'scipion3 installb DiscoTope' to install it "
-    f'automatically. Please check the scipion-chem-discotope README file '
-    f'for more details: {DISCOTOPE_READ_URL}'
+    f"automatically. Please check this plugin's README file for more "
+    f'details: {IMMUNO_README_URL}'
 )
 
 # 'calibrated_score', not the raw 'DiscoTope-3.0_score': the authors publish
@@ -308,14 +307,13 @@ TMBED_T5_MODEL_REQUIRED_FILES = ('config.json',)
 TMBED_T5_MODEL_WEIGHT_FILE_ALTERNATIVES = ('model.safetensors', 'pytorch_model.bin')
 TMBED_T5_MODEL_TOKENIZER_FILE_ALTERNATIVES = ('tokenizer.json', 'spiece.model')
 
-TMBED_READ_URL = 'https://github.com/Lvera-code/scipion-chem-tmbed'
 TMBED_DOWNLOAD_URL = 'https://github.com/BernhoferM/TMbed'
 
 TMBED_NOINSTALL_WARNING = (
     'Installation could not be completed because the local TMbed conda '
     "environment and/or its cached ProtT5 encoder weights have not been "
     "found. Run 'scipion3 installb TMbed' to install it automatically. "
-    f'Please check the scipion-chem-tmbed README file for more details: {TMBED_READ_URL}'
+    f"Please check this plugin's README file for more details: {IMMUNO_README_URL}"
 )
 
 # TMbed '--out-format 1': merges strand/helix confidence tiers into a single
@@ -339,7 +337,6 @@ SIGNALP_DIC = {
 SIGNALP_DEFAULT_BINARY_NAME = 'signalp6'
 SIGNALP_DEFAULT_ORGANISM = 'other'
 
-SIGNALP_READ_URL = 'https://github.com/Lvera-code/scipion-chem-signalp'
 SIGNALP_DOWNLOAD_URL = 'https://services.healthtech.dtu.dk/services/SignalP-6.0/'
 
 SIGNALP_NOINSTALL_WARNING = (
@@ -348,8 +345,8 @@ SIGNALP_NOINSTALL_WARNING = (
     f'DTU Health Tech does not allow redistributing this package: download it '
     f'manually from {SIGNALP_DOWNLOAD_URL} (requires an academic account), build a '
     'dedicated venv (Python 3.10, torch>1.7,<2, numpy<2) and set '
-    'SIGNALP_PYTHON_BIN/SIGNALP_MODEL_DIR in scipion.conf. Please check the '
-    f'scipion-chem-signalp README file for more details: {SIGNALP_READ_URL}'
+    'SIGNALP_PYTHON_BIN/SIGNALP_MODEL_DIR in scipion.conf. Please check '
+    f"this plugin's README file for more details: {IMMUNO_README_URL}"
 )
 
 # Multi-epitope construct assembly, folded in from scipion-chem-epitope-construct.

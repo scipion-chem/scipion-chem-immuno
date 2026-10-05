@@ -8,6 +8,14 @@ Scipion framework plugin for the use of immunoinformatics tools comming from sev
 
 - IIITD: for epitope prediction and evaluation
 - Vaxign-ML: for protective antigen prediction
+- ScanNet and DiscoTope-3.0: for structure-based B-cell epitope prediction
+- EpiDope: for sequence-based B-cell epitope prediction
+- TMbed and SignalP-6.0: for transmembrane topology and signal peptide annotation
+- IApred: for intrinsic antigenicity
+- NetCleave: for C-terminal proteasomal cleavage
+- StackGlyEmbed: for N-linked glycosylation sequons
+- Epitope construct assembly: for building a multi-epitope construct from
+  already selected candidates
 
 ===================
 Install this plugin
@@ -67,6 +75,26 @@ Then add your user to the group:
             sudo usermod -aG docker $USER
 
 Once your user is in the docker group, the installation can proceed normally.
+
+- ScanNet, DiscoTope-3.0, TMbed, EpiDope, IApred, NetCleave and StackGlyEmbed:
+These install automatically with their own conda environment, either as part of
+the plugin installation or on demand:
+
+.. code-block::
+
+            scipion3 installb ScanNet DiscoTope TMbed epidope IApred NetCleave StackGlyEmbed
+
+- SignalP-6.0:
+This one cannot be installed automatically. DTU Health Tech does not allow
+redistributing the package, so it has to be downloaded manually from
+https://services.healthtech.dtu.dk/services/SignalP-6.0/ (requires an academic
+account). Build a dedicated venv for it (Python 3.10, torch>1.7,<2, numpy<2)
+and add these variables to the scipion.conf file:
+    - SIGNALP_PYTHON_BIN = <path/to/venv/bin/python>  (interpreter that can import the signalp package)
+    - SIGNALP_MODEL_DIR = <path/to/models>            (directory containing sequential_models_signalp6/)
+
+The SignalP protocol reports the installation as missing instead of failing
+silently if either variable is unset.
 
 4. **Install**:
 
