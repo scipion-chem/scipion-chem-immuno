@@ -139,5 +139,10 @@ class TestDiscoTopePrediction(BaseTest):
 
         roi = list(outROIs)[0]
         self.assertEqual((roi.getROIIdx(), roi.getROIIdx2(), roi.getROISequence()), self.EXPECTED)
-        self.assertAlmostEqual(roi._meanScore.get(), self.EXPECTED_MEAN_SCORE, places=4)
-        self.assertAlmostEqual(roi._maxScore.get(), self.EXPECTED_MAX_SCORE, places=4)
+        # 3 decimals, not 4: the region boundaries and sequence are reproducible
+        # across machines, but the scores are not bit-identical -- DiscoTope-3.0
+        # runs ESM-IF1 on CPU and the mean drifts in the 5th decimal with the BLAS
+        # build (measured: 1.4814078 vs 1.481464, a 5.6e-05 difference). Pinning 4
+        # decimals tests the floating-point environment, not the protocol.
+        self.assertAlmostEqual(roi._meanScore.get(), self.EXPECTED_MEAN_SCORE, places=3)
+        self.assertAlmostEqual(roi._maxScore.get(), self.EXPECTED_MAX_SCORE, places=3)
