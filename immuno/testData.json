@@ -8,7 +8,7 @@
 			
 		],
 		"others": [
-			
+			{"test": "test_lanlcatnap_crossref.TestLANLCATNAPCrossref", "reason": "The LANL/CATNAP reference databases cannot be installed unattended: their terms of use do not clearly permit redistribution and the site exposes no stable download URL for the antibody database, so both files are downloaded manually and wired through LANL_AB_ALL_PATH/CATNAP_ABS_PATH. The protocol's own validator reports them as missing instead of failing silently."}
 		]
 	}
 }
