@@ -62,4 +62,5 @@ class TestVaxignML(BaseTest):
 		self._waitOutput(protSeqs, 'outputSequences', sleepTime=10)
 		protVax = self._runVaxignML(protSeqs)
 		self._waitOutput(protVax, 'outputSequences', sleepTime=10)
-		assertHandle(self.assertIsNotNone, getattr(protVax, 'outputSequences', None))
+		assertHandle(self.assertIsNotNone, getattr(protVax, 'outputSequences', None),
+								 cwd=protVax.getWorkingDir())
