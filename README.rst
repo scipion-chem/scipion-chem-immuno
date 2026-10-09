@@ -89,10 +89,25 @@ the plugin installation or on demand:
 This one cannot be installed automatically. DTU Health Tech does not allow
 redistributing the package, so it has to be downloaded manually from
 https://services.healthtech.dtu.dk/services/SignalP-6.0/ (requires an academic
-account). Build a dedicated venv for it (Python 3.10, torch>1.7,<2, numpy<2)
-and add these variables to the scipion.conf file:
-    - SIGNALP_PYTHON_BIN = <path/to/venv/bin/python>  (interpreter that can import the signalp package)
-    - SIGNALP_MODEL_DIR = <path/to/models>            (directory containing sequential_models_signalp6/)
+account). Extract the downloaded archive and build a dedicated virtual
+environment for it, where <signalp-dir> is the extracted directory, the one
+holding setup.py and the models/ folder, and <venv-dir> is the location chosen
+for the environment:
+
+.. code-block::
+
+            python3.10 -m venv <venv-dir>
+            <venv-dir>/bin/pip install --upgrade pip
+            <venv-dir>/bin/pip install "torch>1.7,<2" "numpy<2"
+            <venv-dir>/bin/pip install <signalp-dir>
+
+A Python 3.10 interpreter is required. The pinned ranges are the ones the
+package supports, and installing them before the package keeps pip from
+resolving a major version that it cannot work with.
+
+Then add these variables to the scipion.conf file:
+    - SIGNALP_PYTHON_BIN = <venv-dir>/bin/python          (interpreter that can import the signalp package)
+    - SIGNALP_MODEL_DIR = <signalp-dir>/models            (directory containing sequential_models_signalp6/)
 
 The SignalP protocol reports the installation as missing instead of failing
 silently if either variable is unset.
