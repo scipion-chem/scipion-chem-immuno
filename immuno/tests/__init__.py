@@ -24,5 +24,15 @@
 # *
 # **************************************************************************
 
-from immuno.tests import *
+from .test_iiitd import *
+from .test_vaxignML import *
+from .test_epidope import *
+from .test_scannet import *
+from .test_discotope import *
+from .test_tmbed import *
+from .test_signalp import *
+from .test_epitope_construct import *
+from .test_iapred import *
+from .test_netcleave import *
+from .test_stackglyembed import *
 from .test_lanlcatnap_crossref import *

@@ -91,7 +91,7 @@ class ProtIIITDEvaluations(EMProtocol):
                     label='IFNepitope2 window size: ', default=8, condition=f'{allCond} and chooseIIITDEvaluator==1',
                     help='Window size for the scanning of IFNepitope2. User can chose from 8 to 20')
 
-    aGroup.addParam('algMethod', params.EnumParam, label='AlgPred2 model: ', default=0,
+    aGroup.addParam('algMethod', params.EnumParam, label='AlgPred2 model: ', default=1,
                     condition=f'{allCond} and chooseIIITDEvaluator==2', choices=self._algMethods,
                     help='Machine Learning Technique used for developing model.')
     aGroup.addParam('algThval', params.FloatParam,
@@ -134,7 +134,7 @@ class ProtIIITDEvaluations(EMProtocol):
                     label='IL13pred window size: ', default=9, condition=f'{allCond} and chooseIIITDEvaluator==7',
                     help='Window size for the scanning of IL13pred. User can chose from 8 to 35')
 
-    aGroup.addParam('toxin2Method', params.EnumParam, choices=self._toxin2Methods, default=0,
+    aGroup.addParam('toxin2Method', params.EnumParam, choices=self._toxin2Methods, default=1,
                     label='ToxinPred2 method: ', condition=f'{allCond} and chooseIIITDEvaluator==8',
                     help=f'Which ToxinPred2 method to use.\n{TOXIN2WARN}')
     aGroup.addParam('toxin2Thval', params.FloatParam, label='Threshold value: ', default=0.6,
