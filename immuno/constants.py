@@ -507,3 +507,27 @@ STACKGLYEMBED_SEQUON_PATTERN = r'(?=(N[^P][ST]))'
 # external web tools. Reaching it raises an error, so an unresponsive service
 # fails the protocol instead of blocking it indefinitely.
 WEB_RESULT_TIMEOUT = 300
+
+# ----------------------------- LANL/CATNAP bnAb cross-reference -----------------------------
+# ProtLANLCATNAPCrossref wraps no external tool: it is pure pandas/csv logic over
+# two local reference databases, the LANL HIV Molecular Immunology Database and
+# the optional CATNAP neutralization potency dataset. Neither is downloaded
+# automatically. Their terms of use do not clearly permit redistribution, and
+# hiv.lanl.gov exposes no stable download URL for the antibody database, only an
+# interactive search form, while explicitly discouraging automated traffic. The
+# user downloads both files once and points to them through scipion.conf.
+LANL_AB_ALL_PATH = 'LANL_AB_ALL_PATH'
+CATNAP_ABS_PATH = 'CATNAP_ABS_PATH'
+
+LANL_DOWNLOAD_URL = 'https://www.hiv.lanl.gov/content/immunology/'
+CATNAP_DOWNLOAD_URL = 'https://www.hiv.lanl.gov/components/sequence/HIV/neutralization/'
+
+LANLCATNAP_NOINSTALL_WARNING = (
+    'The LANL/CATNAP reference databases could not be found. They are never '
+    'downloaded automatically, because their terms of use do not clearly permit '
+    'redistribution and the site exposes no stable download URL for the antibody '
+    f'database. Download the antibody database from {LANL_DOWNLOAD_URL} and, '
+    f'optionally, the neutralization panel from {CATNAP_DOWNLOAD_URL}, then set '
+    'LANL_AB_ALL_PATH and CATNAP_ABS_PATH in scipion.conf. Please check this '
+    "plugin's README file for more details."
+)

@@ -35,3 +35,4 @@ from .test_epitope_construct import *
 from .test_iapred import *
 from .test_netcleave import *
 from .test_stackglyembed import *
+from .test_lanlcatnap_crossref import *

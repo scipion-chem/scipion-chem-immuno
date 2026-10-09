@@ -27,7 +27,7 @@
 This package contains protocols for creating and using IIITD Raghava software
 """
 
-import multiprocessing, shutil, subprocess
+import multiprocessing, os, shutil, subprocess
 
 from scipion.install.funcs import InstallHelper
 
@@ -79,6 +79,10 @@ class Plugin(pwchemPlugin):
 		cls._defineEmVar(STACKGLYEMBED_DIC['home'], cls.getEnvName(STACKGLYEMBED_DIC))
 		cls._defineVar(STACKGLYEMBED_DIC['activation'], cls.getEnvActivationCommand(STACKGLYEMBED_DIC))
 		cls._defineVar(STACKGLYEMBED_DIC['esm_model_name'], STACKGLYEMBED_DEFAULT_ESM_MODEL_NAME)
+
+    # LANL/CATNAP reference databases: never auto-installed, see constants.py
+		cls._defineVar(LANL_AB_ALL_PATH, '')
+		cls._defineVar(CATNAP_ABS_PATH, '')
 
 	@classmethod
 	def defineBinaries(cls, env, default=True):
@@ -966,7 +970,20 @@ class Plugin(pwchemPlugin):
 					cmds.append(getReplaceCommand(scriptFile, repPair[0], repPair[1]))
 		return ' && '.join(cmds)
 
+	# ---------------------------------- Validation ----------------------------------
 
-
-
-
+	@classmethod
+	def validateLANLCATNAPInstallation(cls):
+		"""Reports the manually-downloaded LANL/CATNAP databases as missing instead of
+		letting the protocol fail silently. The antibody database is required; the CATNAP
+		neutralization panel is optional and only validated when a path is configured."""
+		errors = []
+		lanlPath = cls.getVar(LANL_AB_ALL_PATH)
+		if not lanlPath or not os.path.isfile(lanlPath):
+			errors.append(f"LANL_AB_ALL_PATH is not set or does not exist: '{lanlPath}'.")
+		catnapPath = cls.getVar(CATNAP_ABS_PATH)
+		if catnapPath and not os.path.isfile(catnapPath):
+			errors.append(f"CATNAP_ABS_PATH is set but does not exist: '{catnapPath}'.")
+		if errors:
+			errors.append(LANLCATNAP_NOINSTALL_WARNING)
+		return errors
