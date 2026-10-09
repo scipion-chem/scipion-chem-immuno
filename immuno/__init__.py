@@ -321,7 +321,7 @@ class Plugin(pwchemPlugin):
 
 		# Remove root results dir
 		if os.path.exists(tmpDir):
-			program = f"docker run --rm -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
+			program = "docker run --rm -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
 			args = f'/mnt/{tmpDir}'
 			insistentRun(protocol, program, args, cwd=cwd, popen=True)
 			# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
