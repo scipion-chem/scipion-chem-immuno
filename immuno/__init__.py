@@ -298,6 +298,11 @@ class Plugin(pwchemPlugin):
 		iFile, oDir = kwargs['i'], kwargs['o']
 		kwargs['o'] = tmpDir
 
+		# Vaxign-ML aborts when the requested process count reaches the number of
+		# available cores, so the value is capped below that limit.
+		if 'p' in kwargs:
+			kwargs['p'] = max(1, min(int(kwargs['p']), multiprocessing.cpu_count() - 1))
+
 		program = f"docker run --rm -v {iFile}:{iFile} -v {tmpDir}:{tmpDir} " \
 							f"-v {tmpDir}/_FEATURE/PSORTB:/tmp/results " \
 							"e4ong1031/vaxign-ml:latest python3.6 VaxignML.py "
@@ -312,7 +317,7 @@ class Plugin(pwchemPlugin):
 
 		# Remove root results dir
 		if os.path.exists(tmpDir):
-			program = f"docker run --rm -it -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
+			program = f"docker run --rm -v /:/mnt e4ong1031/vaxign-ml:latest rm -rf "
 			args = f'/mnt/{tmpDir}'
 			insistentRun(protocol, program, args, cwd=cwd, popen=True)
 			# subprocess.check_call(program + args, shell=True, cwd=cwd, stdout=subprocess.DEVNULL)
