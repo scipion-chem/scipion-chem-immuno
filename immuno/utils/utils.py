@@ -463,12 +463,28 @@ def prepareOutputDic(resDic):
   return epDic
 
 
+def waitForResults(findElements, timeout=WEB_RESULT_TIMEOUT, interval=5):
+  '''Return the elements produced by a web service, polling until they show up
+  :param findElements: callable with no arguments that looks the elements up in the page
+  :param timeout: seconds to keep polling before giving up
+  :param interval: seconds between two consecutive lookups
+  :return: the list of elements found
+  A service that stops answering makes the protocol fail with this error instead
+  of blocking it for good.
+  '''
+  elements, waited = findElements(), 0
+  while not elements and waited < timeout:
+    time.sleep(interval)
+    waited += interval
+    elements = findElements()
+  if not elements:
+    raise TimeoutError(f'The web service returned no results after {timeout} seconds')
+  return elements
+
+
 def parseABCpred(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']"))
   headerText = data[0].text
   seqName = innerSplit(headerText, 'Sequence name', '\n')[0]
 
@@ -493,10 +509,7 @@ def parseABCpred(driver):
 
 def parseLBtope(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file')
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file')
+  data = waitForResults(lambda: driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file'))
   data[0].click()
 
   resTxt = driver.find_element(By.XPATH, "/html/body").text
@@ -516,10 +529,7 @@ def parseLBtope(driver):
 
 def parseToxinPred11(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.ID, "tableTwo")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "tableTwo")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "tableTwo"))
   resultWeb = data[0]
 
   resDic = {}
@@ -551,10 +561,7 @@ def parseToxinPred(driver):
         resDic[labels[i]].append(cell.text)
     return resDic
 
-  data = driver.find_elements(By.ID, "tableTwo")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "tableTwo")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "tableTwo"))
   resultWeb = data[0]
 
   outDic = {}
@@ -573,10 +580,7 @@ def parseToxinPred(driver):
 
 def parseToxinPred2(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
-  while not data:
-    time.sleep(5)
-    data = driver.driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[border='1']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -600,10 +604,7 @@ def parseIFNepitope(driver):
         outDic[labels[i]].append(cell.text)
     return outDic
 
-  data = driver.find_elements(By.ID, "example")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "example")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "example"))
   resultWeb = data[0]
 
   labels = ['N0', 'Name', 'Epitope', 'Method', 'Result', 'Score']
@@ -628,10 +629,7 @@ def parseIL10pred(driver):
         resDic[labels[i]].append(cell.text)
     return resDic
 
-  data = driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -651,10 +649,7 @@ def parseIL10pred(driver):
 
 def parseAlgPred2(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[border='1']"))
   resultWeb = data[0]
 
   resDic = {}

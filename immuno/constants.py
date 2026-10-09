@@ -502,3 +502,8 @@ STACKGLYEMBED_NOINSTALL_WARNING = (
 # 'NPNSTPNST' reports N at position 1 AND 7). Returns 1-indexed Asn
 # positions relative to whatever sequence string it is run against.
 STACKGLYEMBED_SEQUON_PATTERN = r'(?=(N[^P][ST]))'
+
+# Upper bound, in seconds, for the wait on a result table served by one of the
+# external web tools. Reaching it raises an error, so an unresponsive service
+# fails the protocol instead of blocking it indefinitely.
+WEB_RESULT_TIMEOUT = 300
