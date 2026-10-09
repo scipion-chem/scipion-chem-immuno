@@ -25,3 +25,4 @@
 # **************************************************************************
 
 from immuno.tests import *
+from .test_lanlcatnap_crossref import *

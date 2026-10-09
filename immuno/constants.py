@@ -159,3 +159,27 @@ EVALSUM = '''1) "ToxinPred3-1": {'software': 'ToxinPred3', 'toxinMethod': 'Machi
 8) "IL13pred-1": {'software': 'IL13pred', 'il13Thval': 0.06, 'il13Window': 9}
 9) "ToxinPred2-1": {'software': 'ToxinPred2', 'toxin2Method': 'AAC based RF', 'toxin2Thval': 0.6}
 '''
+
+# ----------------------------- LANL/CATNAP bnAb cross-reference -----------------------------
+# ProtLANLCATNAPCrossref wraps no external tool: it is pure pandas/csv logic over
+# two local reference databases, the LANL HIV Molecular Immunology Database and
+# the optional CATNAP neutralization potency dataset. Neither is downloaded
+# automatically. Their terms of use do not clearly permit redistribution, and
+# hiv.lanl.gov exposes no stable download URL for the antibody database, only an
+# interactive search form, while explicitly discouraging automated traffic. The
+# user downloads both files once and points to them through scipion.conf.
+LANL_AB_ALL_PATH = 'LANL_AB_ALL_PATH'
+CATNAP_ABS_PATH = 'CATNAP_ABS_PATH'
+
+LANL_DOWNLOAD_URL = 'https://www.hiv.lanl.gov/content/immunology/'
+CATNAP_DOWNLOAD_URL = 'https://www.hiv.lanl.gov/components/sequence/HIV/neutralization/'
+
+LANLCATNAP_NOINSTALL_WARNING = (
+    'The LANL/CATNAP reference databases could not be found. They are never '
+    'downloaded automatically, because their terms of use do not clearly permit '
+    'redistribution and the site exposes no stable download URL for the antibody '
+    f'database. Download the antibody database from {LANL_DOWNLOAD_URL} and, '
+    f'optionally, the neutralization panel from {CATNAP_DOWNLOAD_URL}, then set '
+    'LANL_AB_ALL_PATH and CATNAP_ABS_PATH in scipion.conf. Please check this '
+    "plugin's README file for more details."
+)

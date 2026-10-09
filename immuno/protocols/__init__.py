@@ -26,5 +26,6 @@
 
 from .protocol_epitope_evaluations import ProtIIITDEvaluations
 from .protocol_epitope_prediction import ProtIIITDEpitopePrediction
+from .protocol_lanlcatnap_crossref import ProtLANLCATNAPCrossref
 from .protocol_vaxignML_prediction import ProtVaxignMLEpitopeEvaluation
 

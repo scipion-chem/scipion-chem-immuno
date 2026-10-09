@@ -8,6 +8,7 @@ Scipion framework plugin for the use of immunoinformatics tools comming from sev
 
 - IIITD: for epitope prediction and evaluation
 - Vaxign-ML: for protective antigen prediction
+- LANL/CATNAP: for cross-referencing epitope candidates against known broadly neutralizing antibodies
 
 ===================
 Install this plugin
@@ -67,6 +68,35 @@ Then add your user to the group:
             sudo usermod -aG docker $USER
 
 Once your user is in the docker group, the installation can proceed normally.
+
+- LANL/CATNAP reference databases:
+These are not installed automatically and are not shipped with the plugin. Their
+terms of use do not clearly permit redistribution, and hiv.lanl.gov exposes no
+stable download URL for the antibody database, only an interactive search form,
+while explicitly discouraging automated traffic. They are therefore downloaded
+manually, once.
+
+Required, the antibody database. Open the LANL HIV Molecular Immunology Database
+at https://www.hiv.lanl.gov/content/immunology/, go to the antibody search
+section, run a search with no filters so that every record is returned, and
+export the result as CSV. Save it as 'ab_all.csv'.
+
+Optional, the neutralization panel. Open CATNAP at
+https://www.hiv.lanl.gov/components/sequence/HIV/neutralization/ and download the
+antibody summary table. It adds the mean panel IC50 and the number of viruses
+tested to each match. The protocol runs without it, reporting the potency columns
+as empty.
+
+Save both files under the scipion/software/em folder, in a dedicated
+lanl-catnap subfolder, which is where this plugin's packages are installed.
+Any other readable location also works, as the protocol resolves the files
+through the variables below rather than by searching for them. Then add these
+variables to the scipion.conf file:
+    - LANL_AB_ALL_PATH = <path/to/ab_all.csv>   (required, LANL antibody database export)
+    - CATNAP_ABS_PATH = <path/to/catnap_abs>    (optional, CATNAP neutralization panel)
+
+The LANL/CATNAP protocol reports the databases as missing, naming the variable
+that is unset or the path that does not exist, instead of failing silently.
 
 4. **Install**:
 
