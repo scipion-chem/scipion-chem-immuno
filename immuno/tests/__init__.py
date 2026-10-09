@@ -24,4 +24,5 @@
 # *
 # **************************************************************************
 
-from immuno.tests.test_iiitd_selection import *
+from immuno.tests import *
+from .test_lanlcatnap_crossref import *

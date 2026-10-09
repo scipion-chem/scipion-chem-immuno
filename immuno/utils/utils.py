@@ -24,10 +24,12 @@
 # *
 # **************************************************************************
 
-import time, os, requests
+import time, os, requests, subprocess as sp
 from Bio import SeqIO
 
-from ..constants import EVAL_PARAM_MAP
+from pwchem import Plugin as pwchemPlugin
+
+from ..constants import *
 
 def runEpitopeSelection(softwareName, argsDic, browserData={}):
   ''' Run an epitope selector program with the specified arguments and parse the results
@@ -97,12 +99,12 @@ def getFastaStrs(seqDic, maxChunk=1):
   seqLists = divide_chunks(seqList, maxChunk)
   return buildSeqFasta(seqLists)
 
-def getFastaFiles(seqDic, evalSoft, maxChunk=1):
+def getFastaFiles(seqDic, evalSoft, outDir='/tmp', maxChunk=1):
   '''Write a series of fasta files with maxChunk number of sequences from a set of sequences'''
   fastaStrs = getFastaStrs(seqDic, maxChunk)
   faFiles = []
   for i, fStr in enumerate(fastaStrs):
-    faFiles.append(f'/tmp/{evalSoft}_input_{i}.fa')
+    faFiles.append(os.path.join(outDir, f'{evalSoft}_input_{i}.fa'))
     with open(faFiles[-1], 'w') as f:
       f.write(fStr)
   return faFiles
@@ -116,6 +118,14 @@ def setData(driver, paramDic):
   for dk, dv in paramDic.items():
     dataElements = driver.find_elements(By.NAME, dk)
     for dEl in dataElements:
+      try:
+        # Writtable parameters
+        dEl.clear()
+        dEl.send_keys(dv)
+      except:
+        # Chosing parameters
+        dEl.send_keys(dv)
+      # Clicking parameters
       if dEl.get_attribute('value') == dv:
         dEl.click()
   return driver
@@ -130,7 +140,7 @@ def getDriver(browserData):
     - name: str, the name of the browser to use (either "Chrome" for Google-Chrome or Firefox)
     - path: str, path for the browser executable in case of non default
   '''
-  if not 'name' in browserData or browserData['name'] != 'Firefox':
+  if not 'name' in browserData or browserData['name'].lower() != 'firefox':
     options = ChromeOptions()
     driverObj = webdriver.Chrome
     browserPath = '/usr/bin/google-chrome' if (not 'path' in browserData or not browserData['path'])\
@@ -234,6 +244,49 @@ def innerSplit(text, preText, endText):
     results.append(text.strip().split(endText)[0].strip())
   return results
 
+def filterSequences(inSeqDic, minLen=0, maxLen=100000):
+  '''Filter an input sequences dic with min/max lengths.
+  nullDic collects the items in order and already fills the null values for those sequences filtered
+  Returns the dictionaries with the sequences that pass and do not pass the filter
+  '''
+  passDic = {}
+  for seqId, seq in inSeqDic.items():
+    if len(seq) >= minLen and len(seq) <= maxLen:
+      passDic[seqId] = seq
+
+  return passDic
+
+########## STANDALONE CALLS ###########
+
+def callIIITD(seqDic, software, evalDic, outFile):
+  outDir = os.path.dirname(outFile)
+  faFile = getFastaFiles(seqDic, software, outDir, maxChunk=100)[0]
+  args = f' -i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
+  envDic = IL6PRED_DIC if software.lower() == 'il6pred' else IIITD_DIC
+
+  if os.path.exists(outFile):
+    os.remove(outFile)
+  fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {software.lower()} '
+  return sp.Popen(fullProgram + args, shell=True)
+
+def getArgs(evalDic):
+  mapKeysDic = {'Thval': '-t', 'Window': '-w', 'Method': '-m', 'Host': '-s'}
+  mapValsDic = {'Machine Learning (ML)': 1, 'Hybrid (MERCI + ML)': 2,
+                'Human': 1, 'Mouse': 2,
+                "AAC based RF": 1, "Hybrid (RF+BLAST+MERCI)": 2}
+
+  curEDic = {}
+  for pName, pVal in evalDic.items():
+    for mapShort, mapVal in mapKeysDic.items():
+      if mapShort in pName:
+        curEDic[mapVal] = pVal
+
+        if pVal in mapValsDic:
+          curEDic[mapVal] = mapValsDic[pVal]
+
+  return ' '.join(f'{k} {v}' for k, v in curEDic.items())
+
+
 ########## REQUESTS ##########
 
 def makeRequest(url, action='post', data={}, headers={}):
@@ -293,6 +346,7 @@ def callToxinPred(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'seq', 'params': data, 'submitCSS': "input[value='Run Analysis!']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[TOXINPRED])
   outDic = seleniumRequest(sequences, softData, browserData, parseToxinPred)
   return outDic
 
@@ -316,6 +370,7 @@ def callIFNepitope(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'sequence', 'params': data, 'submitCSS': "input[value='Submit Peptides for Prediction']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[IFNEPITOPE])
   outDic = seleniumRequest(sequences, softData, browserData, parseIFNepitope)
   return outDic
 
@@ -327,6 +382,7 @@ def callIL4pred(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'seq', 'params': data, 'submitCSS': "input[value='Virtual Screening']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[IL4PRED])
   outDic = seleniumRequest(sequences, softData, browserData, parseToxinPred)
   return outDic
 
@@ -387,16 +443,14 @@ def parseABCpredOutHTML(response):
   return outDic
 
 
-def filterBestEpitopes(resDic, minProb=78):
-  # todo: use input minprob
+def prepareOutputDic(resDic):
   epDic = {}
   for protId in resDic:
     epDic[protId] = {}
     for i, ep in enumerate(resDic[protId]):
-      prob = resDic[protId][ep]['Probability']
-      if prob >= minProb:
-        epDic[protId] = updateBatchDic(epDic[protId],
-                                       {'Sequence': [ep], 'Position': [i + 1], 'Score': [resDic[protId][ep]['Score']]})
+      epDic[protId] = updateBatchDic(epDic[protId],
+                                     {'Sequence': [ep], 'Position': [i + 1], 'Score': [resDic[protId][ep]['Score']],
+                                     'Probability': [resDic[protId][ep]['Probability']]})
   return epDic
 
 
@@ -448,7 +502,7 @@ def parseLBtope(driver):
     else:
       protId = sline[2].replace('>', '')
       resDic[protId] = {}
-  epDic = filterBestEpitopes(resDic)
+  epDic = prepareOutputDic(resDic)
   return epDic
 
 def parseToxinPred11(driver):
@@ -486,7 +540,7 @@ def parseToxinPred(driver):
     for row in tbody.find_elements(By.TAG_NAME, 'tr'):
       for i, cell in enumerate(row.find_elements(By.TAG_NAME, 'td')):
         resDic[labels[i]].append(cell.text)
-    return outDic
+    return resDic
 
   data = driver.find_elements(By.ID, "tableTwo")
   while not data:
@@ -606,6 +660,18 @@ def parseAlgPred2(driver):
       resDic[labels[i]].append(cell.text)
   outDic = renameScore(resDic)
   return outDic
+
+def parseIIITD(outFile, software):
+  scoreCol = {'toxinpred3': 2, 'algpred2': 2, 'ifnepitope2': 4, 'il13pred': 3, 'il5pred': 4,
+              'il6pred': 3, 'toxinpred2': 2}
+  sCol = scoreCol[software.lower()]
+
+  scores = []
+  with open(outFile) as f:
+    f.readline()
+    for line in f:
+      scores.append(float(line.split(',')[sCol]))
+  return scores
 
 def renameScore(outDic, scoreKey=''):
   '''Rename the score key in a dict with just "Score"'''

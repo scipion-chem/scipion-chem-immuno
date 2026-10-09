@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 
-from .protocol_add_epitope_evaluations import ProtIIITDEvaluations
-from .protocol_epitope_selection import ProtIIITDEpitopeSelection
+from .protocol_epitope_evaluations import ProtIIITDEvaluations
+from .protocol_epitope_prediction import ProtIIITDEpitopePrediction
+from .protocol_lanlcatnap_crossref import ProtLANLCATNAPCrossref
+from .protocol_vaxignML_prediction import ProtVaxignMLEpitopeEvaluation
 
