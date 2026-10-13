@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import time, os, requests, subprocess as sp
+import tempfile, time, os, requests, subprocess as sp
 from Bio import SeqIO
 
 from pwchem import Plugin as pwchemPlugin
@@ -267,7 +267,16 @@ def callIIITD(seqDic, software, evalDic, outFile):
   if os.path.exists(outFile):
     os.remove(outFile)
   fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {software.lower()} '
-  return sp.Popen(fullProgram + args, shell=True)
+  # Several IIITD CLIs (confirmed real for toxinpred2's Hybrid mode: reads/
+  # writes 'seq.aac' and other intermediate files relative to the process
+  # cwd, not to -i/-o) -- running two evaluators concurrently (this
+  # function is called from a multiprocessing.Pool) with no cwd isolation
+  # causes them to collide on those shared filenames (a real 'seq.aac not
+  # found' crash was reproduced this way). -i/-o are always absolute here
+  # (outFile/faFile are built from an already-absolute outDir), so handing
+  # each call its own throwaway cwd is safe.
+  workDir = tempfile.mkdtemp(prefix=f'{software.lower()}_', dir=outDir)
+  return sp.Popen(fullProgram + args, shell=True, cwd=workDir)
 
 def getArgs(evalDic):
   mapKeysDic = {'Thval': '-t', 'Window': '-w', 'Method': '-m', 'Host': '-s'}
@@ -454,12 +463,28 @@ def prepareOutputDic(resDic):
   return epDic
 
 
+def waitForResults(findElements, timeout=WEB_RESULT_TIMEOUT, interval=5):
+  '''Return the elements produced by a web service, polling until they show up
+  :param findElements: callable with no arguments that looks the elements up in the page
+  :param timeout: seconds to keep polling before giving up
+  :param interval: seconds between two consecutive lookups
+  :return: the list of elements found
+  A service that stops answering makes the protocol fail with this error instead
+  of blocking it for good.
+  '''
+  elements, waited = findElements(), 0
+  while not elements and waited < timeout:
+    time.sleep(interval)
+    waited += interval
+    elements = findElements()
+  if not elements:
+    raise TimeoutError(f'The web service returned no results after {timeout} seconds')
+  return elements
+
+
 def parseABCpred(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']"))
   headerText = data[0].text
   seqName = innerSplit(headerText, 'Sequence name', '\n')[0]
 
@@ -484,10 +509,7 @@ def parseABCpred(driver):
 
 def parseLBtope(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file')
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file')
+  data = waitForResults(lambda: driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file'))
   data[0].click()
 
   resTxt = driver.find_element(By.XPATH, "/html/body").text
@@ -507,10 +529,7 @@ def parseLBtope(driver):
 
 def parseToxinPred11(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.ID, "tableTwo")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "tableTwo")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "tableTwo"))
   resultWeb = data[0]
 
   resDic = {}
@@ -542,10 +561,7 @@ def parseToxinPred(driver):
         resDic[labels[i]].append(cell.text)
     return resDic
 
-  data = driver.find_elements(By.ID, "tableTwo")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "tableTwo")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "tableTwo"))
   resultWeb = data[0]
 
   outDic = {}
@@ -564,10 +580,7 @@ def parseToxinPred(driver):
 
 def parseToxinPred2(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
-  while not data:
-    time.sleep(5)
-    data = driver.driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[border='1']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -591,10 +604,7 @@ def parseIFNepitope(driver):
         outDic[labels[i]].append(cell.text)
     return outDic
 
-  data = driver.find_elements(By.ID, "example")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "example")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "example"))
   resultWeb = data[0]
 
   labels = ['N0', 'Name', 'Epitope', 'Method', 'Result', 'Score']
@@ -619,10 +629,7 @@ def parseIL10pred(driver):
         resDic[labels[i]].append(cell.text)
     return resDic
 
-  data = driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -642,10 +649,7 @@ def parseIL10pred(driver):
 
 def parseAlgPred2(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[border='1']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -664,11 +668,24 @@ def parseAlgPred2(driver):
 def parseIIITD(outFile, software):
   scoreCol = {'toxinpred3': 2, 'algpred2': 2, 'ifnepitope2': 4, 'il13pred': 3, 'il5pred': 4,
               'il6pred': 3, 'toxinpred2': 2}
-  sCol = scoreCol[software.lower()]
 
   scores = []
   with open(outFile) as f:
-    f.readline()
+    header = f.readline().strip().split(',')
+    # algpred2/toxinpred2 in Hybrid mode write a DIFFERENT column layout
+    # (Subject,ML Score,MERCI Score/Hits,BLAST Score,Hybrid Score,Prediction)
+    # than in AAC-only mode (ID,Sequence,ML_Score,Prediction) -- confirmed
+    # by running both CLIs for real. The fixed index 2 above is only
+    # correct for AAC mode (where it lands on 'ML_Score'); in Hybrid mode
+    # it silently lands on the MERCI column instead of the intended
+    # combined score. Select by column NAME when 'Hybrid Score' is present
+    # (Hybrid mode), falling back to the fixed index otherwise (AAC mode,
+    # and every other software in scoreCol that this project hasn't
+    # verified against a Hybrid-shaped output).
+    if 'Hybrid Score' in header:
+      sCol = header.index('Hybrid Score')
+    else:
+      sCol = scoreCol[software.lower()]
     for line in f:
       scores.append(float(line.split(',')[sCol]))
   return scores

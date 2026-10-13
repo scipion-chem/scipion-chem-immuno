@@ -2,12 +2,15 @@
 	"datasets": [],
 	"skippable": {
 		"gpu": [
-			
+
 		],
 		"dependencies": [
-			
+
 		],
 		"others": [
+			{"test": "test_iiitd.TestIIITDPrediction", "reason": "The protocol drives the IIITD web tools through a browser session. Those services return no result table when the request comes from a continuous integration runner, so the wait reaches its timeout and the protocol reports it. The tools offer no local counterpart to fall back on, so the outcome depends on a third-party service rather than on this repository."},
+			{"test": "test_iiitd.TestIIITDEvaluation", "reason": "The protocol drives the IIITD web tools through a browser session. Those services return no result table when the request comes from a continuous integration runner, so the wait reaches its timeout and the protocol reports it. The tools offer no local counterpart to fall back on, so the outcome depends on a third-party service rather than on this repository."},
+			{"test": "test_signalp.TestSignalPPrediction", "reason": "SignalP-6.0 cannot be installed unattended: DTU Health Tech does not allow redistributing the package, so it has to be downloaded manually with an academic account and wired through SIGNALP_PYTHON_BIN/SIGNALP_MODEL_DIR. The protocol's own validator reports it as missing instead of failing silently."},
 			{"test": "test_lanlcatnap_crossref.TestLANLCATNAPCrossref", "reason": "The LANL/CATNAP reference databases cannot be installed unattended: their terms of use do not clearly permit redistribution and the site exposes no stable download URL for the antibody database, so both files are downloaded manually and wired through LANL_AB_ALL_PATH/CATNAP_ABS_PATH. The protocol's own validator reports them as missing instead of failing silently."}
 		]
 	}

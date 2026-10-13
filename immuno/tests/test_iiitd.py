@@ -71,7 +71,8 @@ class TestIIITDPrediction(BaseTest):
 	def test(self):
 		protSel = self._runIIITDSelection()
 		self._waitOutput(protSel, 'outputROIs', sleepTime=10)
-		assertHandle(self.assertIsNotNone, getattr(protSel, 'outputROIs', None))
+		assertHandle(self.assertIsNotNone, getattr(protSel, 'outputROIs', None),
+								 cwd=protSel.getWorkingDir())
 
 
 class TestIIITDEvaluation(TestIIITDPrediction):
@@ -94,4 +95,5 @@ class TestIIITDEvaluation(TestIIITDPrediction):
 		self._waitOutput(protSel, 'outputROIs', sleepTime=10)
 		protEval = self._runIIITDEvaluation(protSel)
 		self._waitOutput(protEval, 'outputROIs', sleepTime=10)
-		assertHandle(self.assertIsNotNone, getattr(protEval, 'outputROIs', None))
+		assertHandle(self.assertIsNotNone, getattr(protEval, 'outputROIs', None),
+								 cwd=protEval.getWorkingDir())
