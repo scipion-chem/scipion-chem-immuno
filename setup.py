@@ -33,7 +33,7 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'immuno': ['immuno_logo.png'],
+       'immuno': ['immuno_logo.png', 'scripts/*.py'],
     },
     entry_points={
         'pyworkflow.plugin': 'immuno = immuno'

@@ -24,10 +24,12 @@
 # *
 # **************************************************************************
 
-import time, os, requests
+import tempfile, time, os, requests, subprocess as sp
 from Bio import SeqIO
 
-from ..constants import EVAL_PARAM_MAP
+from pwchem import Plugin as pwchemPlugin
+
+from ..constants import *
 
 def runEpitopeSelection(softwareName, argsDic, browserData={}):
   ''' Run an epitope selector program with the specified arguments and parse the results
@@ -97,12 +99,12 @@ def getFastaStrs(seqDic, maxChunk=1):
   seqLists = divide_chunks(seqList, maxChunk)
   return buildSeqFasta(seqLists)
 
-def getFastaFiles(seqDic, evalSoft, maxChunk=1):
+def getFastaFiles(seqDic, evalSoft, outDir='/tmp', maxChunk=1):
   '''Write a series of fasta files with maxChunk number of sequences from a set of sequences'''
   fastaStrs = getFastaStrs(seqDic, maxChunk)
   faFiles = []
   for i, fStr in enumerate(fastaStrs):
-    faFiles.append(f'/tmp/{evalSoft}_input_{i}.fa')
+    faFiles.append(os.path.join(outDir, f'{evalSoft}_input_{i}.fa'))
     with open(faFiles[-1], 'w') as f:
       f.write(fStr)
   return faFiles
@@ -116,6 +118,14 @@ def setData(driver, paramDic):
   for dk, dv in paramDic.items():
     dataElements = driver.find_elements(By.NAME, dk)
     for dEl in dataElements:
+      try:
+        # Writtable parameters
+        dEl.clear()
+        dEl.send_keys(dv)
+      except:
+        # Chosing parameters
+        dEl.send_keys(dv)
+      # Clicking parameters
       if dEl.get_attribute('value') == dv:
         dEl.click()
   return driver
@@ -130,7 +140,7 @@ def getDriver(browserData):
     - name: str, the name of the browser to use (either "Chrome" for Google-Chrome or Firefox)
     - path: str, path for the browser executable in case of non default
   '''
-  if not 'name' in browserData or browserData['name'] != 'Firefox':
+  if not 'name' in browserData or browserData['name'].lower() != 'firefox':
     options = ChromeOptions()
     driverObj = webdriver.Chrome
     browserPath = '/usr/bin/google-chrome' if (not 'path' in browserData or not browserData['path'])\
@@ -234,6 +244,58 @@ def innerSplit(text, preText, endText):
     results.append(text.strip().split(endText)[0].strip())
   return results
 
+def filterSequences(inSeqDic, minLen=0, maxLen=100000):
+  '''Filter an input sequences dic with min/max lengths.
+  nullDic collects the items in order and already fills the null values for those sequences filtered
+  Returns the dictionaries with the sequences that pass and do not pass the filter
+  '''
+  passDic = {}
+  for seqId, seq in inSeqDic.items():
+    if len(seq) >= minLen and len(seq) <= maxLen:
+      passDic[seqId] = seq
+
+  return passDic
+
+########## STANDALONE CALLS ###########
+
+def callIIITD(seqDic, software, evalDic, outFile):
+  outDir = os.path.dirname(outFile)
+  faFile = getFastaFiles(seqDic, software, outDir, maxChunk=100)[0]
+  args = f' -i {faFile} -o {outFile} -d 2 {getArgs(evalDic)}'
+  envDic = IL6PRED_DIC if software.lower() == 'il6pred' else IIITD_DIC
+
+  if os.path.exists(outFile):
+    os.remove(outFile)
+  fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {software.lower()} '
+  # Several IIITD CLIs (confirmed real for toxinpred2's Hybrid mode: reads/
+  # writes 'seq.aac' and other intermediate files relative to the process
+  # cwd, not to -i/-o) -- running two evaluators concurrently (this
+  # function is called from a multiprocessing.Pool) with no cwd isolation
+  # causes them to collide on those shared filenames (a real 'seq.aac not
+  # found' crash was reproduced this way). -i/-o are always absolute here
+  # (outFile/faFile are built from an already-absolute outDir), so handing
+  # each call its own throwaway cwd is safe.
+  workDir = tempfile.mkdtemp(prefix=f'{software.lower()}_', dir=outDir)
+  return sp.Popen(fullProgram + args, shell=True, cwd=workDir)
+
+def getArgs(evalDic):
+  mapKeysDic = {'Thval': '-t', 'Window': '-w', 'Method': '-m', 'Host': '-s'}
+  mapValsDic = {'Machine Learning (ML)': 1, 'Hybrid (MERCI + ML)': 2,
+                'Human': 1, 'Mouse': 2,
+                "AAC based RF": 1, "Hybrid (RF+BLAST+MERCI)": 2}
+
+  curEDic = {}
+  for pName, pVal in evalDic.items():
+    for mapShort, mapVal in mapKeysDic.items():
+      if mapShort in pName:
+        curEDic[mapVal] = pVal
+
+        if pVal in mapValsDic:
+          curEDic[mapVal] = mapValsDic[pVal]
+
+  return ' '.join(f'{k} {v}' for k, v in curEDic.items())
+
+
 ########## REQUESTS ##########
 
 def makeRequest(url, action='post', data={}, headers={}):
@@ -293,6 +355,7 @@ def callToxinPred(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'seq', 'params': data, 'submitCSS': "input[value='Run Analysis!']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[TOXINPRED])
   outDic = seleniumRequest(sequences, softData, browserData, parseToxinPred)
   return outDic
 
@@ -316,6 +379,7 @@ def callIFNepitope(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'sequence', 'params': data, 'submitCSS': "input[value='Submit Peptides for Prediction']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[IFNEPITOPE])
   outDic = seleniumRequest(sequences, softData, browserData, parseIFNepitope)
   return outDic
 
@@ -327,6 +391,7 @@ def callIL4pred(sequences, browserData={}, data={}):
               'multi': True, 'seqFormat': 'fastaString',
               'seqName': 'seq', 'params': data, 'submitCSS': "input[value='Virtual Screening']"}
 
+  sequences = filterSequences(sequences, maxLen=SEQ_LIMITS[IL4PRED])
   outDic = seleniumRequest(sequences, softData, browserData, parseToxinPred)
   return outDic
 
@@ -387,25 +452,39 @@ def parseABCpredOutHTML(response):
   return outDic
 
 
-def filterBestEpitopes(resDic, minProb=78):
-  # todo: use input minprob
+def prepareOutputDic(resDic):
   epDic = {}
   for protId in resDic:
     epDic[protId] = {}
     for i, ep in enumerate(resDic[protId]):
-      prob = resDic[protId][ep]['Probability']
-      if prob >= minProb:
-        epDic[protId] = updateBatchDic(epDic[protId],
-                                       {'Sequence': [ep], 'Position': [i + 1], 'Score': [resDic[protId][ep]['Score']]})
+      epDic[protId] = updateBatchDic(epDic[protId],
+                                     {'Sequence': [ep], 'Position': [i + 1], 'Score': [resDic[protId][ep]['Score']],
+                                     'Probability': [resDic[protId][ep]['Probability']]})
   return epDic
+
+
+def waitForResults(findElements, timeout=WEB_RESULT_TIMEOUT, interval=5):
+  '''Return the elements produced by a web service, polling until they show up
+  :param findElements: callable with no arguments that looks the elements up in the page
+  :param timeout: seconds to keep polling before giving up
+  :param interval: seconds between two consecutive lookups
+  :return: the list of elements found
+  A service that stops answering makes the protocol fail with this error instead
+  of blocking it for good.
+  '''
+  elements, waited = findElements(), 0
+  while not elements and waited < timeout:
+    time.sleep(interval)
+    waited += interval
+    elements = findElements()
+  if not elements:
+    raise TimeoutError(f'The web service returned no results after {timeout} seconds')
+  return elements
 
 
 def parseABCpred(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[width='60% bgcolor=']"))
   headerText = data[0].text
   seqName = innerSplit(headerText, 'Sequence name', '\n')[0]
 
@@ -430,10 +509,7 @@ def parseABCpred(driver):
 
 def parseLBtope(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file')
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file')
+  data = waitForResults(lambda: driver.find_elements(By.PARTIAL_LINK_TEXT, 'Download results as a text file'))
   data[0].click()
 
   resTxt = driver.find_element(By.XPATH, "/html/body").text
@@ -448,15 +524,12 @@ def parseLBtope(driver):
     else:
       protId = sline[2].replace('>', '')
       resDic[protId] = {}
-  epDic = filterBestEpitopes(resDic)
+  epDic = prepareOutputDic(resDic)
   return epDic
 
 def parseToxinPred11(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.ID, "tableTwo")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "tableTwo")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "tableTwo"))
   resultWeb = data[0]
 
   resDic = {}
@@ -486,12 +559,9 @@ def parseToxinPred(driver):
     for row in tbody.find_elements(By.TAG_NAME, 'tr'):
       for i, cell in enumerate(row.find_elements(By.TAG_NAME, 'td')):
         resDic[labels[i]].append(cell.text)
-    return outDic
+    return resDic
 
-  data = driver.find_elements(By.ID, "tableTwo")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "tableTwo")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "tableTwo"))
   resultWeb = data[0]
 
   outDic = {}
@@ -510,10 +580,7 @@ def parseToxinPred(driver):
 
 def parseToxinPred2(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
-  while not data:
-    time.sleep(5)
-    data = driver.driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[border='1']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -537,10 +604,7 @@ def parseIFNepitope(driver):
         outDic[labels[i]].append(cell.text)
     return outDic
 
-  data = driver.find_elements(By.ID, "example")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.ID, "example")
+  data = waitForResults(lambda: driver.find_elements(By.ID, "example"))
   resultWeb = data[0]
 
   labels = ['N0', 'Name', 'Epitope', 'Method', 'Result', 'Score']
@@ -565,10 +629,7 @@ def parseIL10pred(driver):
         resDic[labels[i]].append(cell.text)
     return resDic
 
-  data = driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[class='table table-hover']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -588,10 +649,7 @@ def parseIL10pred(driver):
 
 def parseAlgPred2(driver):
   from selenium.webdriver.common.by import By
-  data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
-  while not data:
-    time.sleep(5)
-    data = driver.find_elements(By.CSS_SELECTOR, "table[border='1']")
+  data = waitForResults(lambda: driver.find_elements(By.CSS_SELECTOR, "table[border='1']"))
   resultWeb = data[0]
 
   resDic = {}
@@ -606,6 +664,31 @@ def parseAlgPred2(driver):
       resDic[labels[i]].append(cell.text)
   outDic = renameScore(resDic)
   return outDic
+
+def parseIIITD(outFile, software):
+  scoreCol = {'toxinpred3': 2, 'algpred2': 2, 'ifnepitope2': 4, 'il13pred': 3, 'il5pred': 4,
+              'il6pred': 3, 'toxinpred2': 2}
+
+  scores = []
+  with open(outFile) as f:
+    header = f.readline().strip().split(',')
+    # algpred2/toxinpred2 in Hybrid mode write a DIFFERENT column layout
+    # (Subject,ML Score,MERCI Score/Hits,BLAST Score,Hybrid Score,Prediction)
+    # than in AAC-only mode (ID,Sequence,ML_Score,Prediction) -- confirmed
+    # by running both CLIs for real. The fixed index 2 above is only
+    # correct for AAC mode (where it lands on 'ML_Score'); in Hybrid mode
+    # it silently lands on the MERCI column instead of the intended
+    # combined score. Select by column NAME when 'Hybrid Score' is present
+    # (Hybrid mode), falling back to the fixed index otherwise (AAC mode,
+    # and every other software in scoreCol that this project hasn't
+    # verified against a Hybrid-shaped output).
+    if 'Hybrid Score' in header:
+      sCol = header.index('Hybrid Score')
+    else:
+      sCol = scoreCol[software.lower()]
+    for line in f:
+      scores.append(float(line.split(',')[sCol]))
+  return scores
 
 def renameScore(outDic, scoreKey=''):
   '''Rename the score key in a dict with just "Score"'''

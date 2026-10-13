@@ -30,11 +30,52 @@ from pwem.protocols import ProtImportSequence
 
 from pwchem.utils import assertHandle
 
-from .test_iiitd_selection import TestIIITDSelection
-from ..protocols import ProtIIITDEvaluations
-from ..constants import EVALSUM
+from ..protocols import ProtIIITDEpitopePrediction, ProtIIITDEvaluations
+from ..constants import SELSUM, EVALSUM
 
-class TestIIITDEvaluation(TestIIITDSelection):
+class TestIIITDPrediction(BaseTest):
+	NAME = 'USER_SEQ'
+	DESCRIPTION = 'User description'
+	AMINOACIDSSEQ1 = 'MVLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHG'
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.ds = DataSet.getDataSet('model_building_tutorial')
+		setupTestProject(cls)
+
+		cls._runImportSeq()
+		cls._waitOutput(cls.protImportSeq, 'outputSequences', sleepTime=5)
+
+	@classmethod
+	def _runImportSeq(cls):
+		kwargs = {'inputSequenceName': cls.NAME,
+							'inputSequenceDescription': cls.DESCRIPTION,
+							'inputRawSequence': cls.AMINOACIDSSEQ1
+							}
+
+		cls.protImportSeq = cls.newProtocol(
+			ProtImportSequence, **kwargs)
+		cls.proj.launchProtocol(cls.protImportSeq, wait=False)
+
+	def _runIIITDSelection(self):
+		protSel = self.newProtocol(ProtIIITDEpitopePrediction,
+																		inSels=SELSUM)
+
+		protSel.inputSequence.set(self.protImportSeq)
+		protSel.inputSequence.setExtended('outputSequence')
+
+		self.proj.launchProtocol(protSel, wait=False)
+		return protSel
+
+	def test(self):
+		protSel = self._runIIITDSelection()
+		self._waitOutput(protSel, 'outputROIs', sleepTime=10)
+		assertHandle(self.assertIsNotNone, getattr(protSel, 'outputROIs', None),
+								 cwd=protSel.getWorkingDir())
+
+
+class TestIIITDEvaluation(TestIIITDPrediction):
 	NAME = 'USER_SEQ'
 	DESCRIPTION = 'User description'
 	AMINOACIDSSEQ1 = 'MVLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHG'
@@ -54,4 +95,5 @@ class TestIIITDEvaluation(TestIIITDSelection):
 		self._waitOutput(protSel, 'outputROIs', sleepTime=10)
 		protEval = self._runIIITDEvaluation(protSel)
 		self._waitOutput(protEval, 'outputROIs', sleepTime=10)
-		assertHandle(self.assertIsNotNone, getattr(protEval, 'outputROIs', None))
+		assertHandle(self.assertIsNotNone, getattr(protEval, 'outputROIs', None),
+								 cwd=protEval.getWorkingDir())

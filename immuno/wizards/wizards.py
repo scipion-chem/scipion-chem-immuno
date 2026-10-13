@@ -30,7 +30,7 @@
 
 from pwchem.wizards import AddElementWizard
 
-from ..protocols import ProtIIITDEpitopeSelection, ProtIIITDEvaluations
+from ..protocols import ProtIIITDEpitopePrediction, ProtIIITDEvaluations
 
 class AddIIITDElement(AddElementWizard):
   """Add filter expression in ligand filter protocol"""
@@ -54,7 +54,7 @@ class AddIIITDElement(AddElementWizard):
       print('The software name and values cannot be repeated')
 
 
-AddIIITDElement().addTarget(protocol=ProtIIITDEpitopeSelection,
+AddIIITDElement().addTarget(protocol=ProtIIITDEpitopePrediction,
                              targets=['addSel'],
                              inputs=['inSels'],
                              outputs=['inSels'])

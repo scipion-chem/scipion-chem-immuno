@@ -8,6 +8,15 @@ Scipion framework plugin for the use of immunoinformatics tools comming from sev
 
 - IIITD: for epitope prediction and evaluation
 - Vaxign-ML: for protective antigen prediction
+- ScanNet and DiscoTope-3.0: for structure-based B-cell epitope prediction
+- EpiDope: for sequence-based B-cell epitope prediction
+- TMbed and SignalP-6.0: for transmembrane topology and signal peptide annotation
+- IApred: for intrinsic antigenicity
+- NetCleave: for C-terminal proteasomal cleavage
+- StackGlyEmbed: for N-linked glycosylation sequons
+- Epitope construct assembly: for building a multi-epitope construct from
+  already selected candidates
+- LANL/CATNAP: for cross-referencing epitope candidates against known broadly neutralizing antibodies
 
 ===================
 Install this plugin
@@ -45,13 +54,92 @@ If you want the latest changes and developments, user devel branch.
             cd scipion-chem-immuno
             git checkout devel
 
-3. **Define browser**
+3. **Prerequisites**
 
-This plugin uses web browser to access the software servers online.
+- IIITD:
+This package uses web browser to access the software servers online.
 Therefore, you need to specify which browser to use and its location.
 Do so editing the scipion.conf file and add the variables:
     - IIITD_BROWSER = firefox/chrome/chromium  (defines the browser to use, that must already be installed in your computer)
     - IIITD_BROWSER_PATH = <path/to/browser>   (defines the location of the binary for the browser use)
+
+- Vaxign-ML:
+This package runs using a docker image. Since docker images need special permission to be downloaded, the user needs to
+be included in the "docker" bash group of the machine to be able to use it. Managing these groups need sudo permissions.
+
+To create the "docker" group:
+.. code-block::
+            sudo groupadd docker
+
+Then add your user to the group:
+.. code-block::
+            sudo usermod -aG docker $USER
+
+Once your user is in the docker group, the installation can proceed normally.
+
+- ScanNet, DiscoTope-3.0, TMbed, EpiDope, IApred, NetCleave and StackGlyEmbed:
+These install automatically with their own conda environment, either as part of
+the plugin installation or on demand:
+
+.. code-block::
+
+            scipion3 installb ScanNet DiscoTope TMbed epidope IApred NetCleave StackGlyEmbed
+
+- SignalP-6.0:
+This one cannot be installed automatically. DTU Health Tech does not allow
+redistributing the package, so it has to be downloaded manually from
+https://services.healthtech.dtu.dk/services/SignalP-6.0/ (requires an academic
+account). Extract the downloaded archive and build a dedicated virtual
+environment for it, where <signalp-dir> is the extracted directory, the one
+holding setup.py and the models/ folder, and <venv-dir> is the location chosen
+for the environment:
+
+.. code-block::
+
+            python3.10 -m venv <venv-dir>
+            <venv-dir>/bin/pip install --upgrade pip
+            <venv-dir>/bin/pip install "torch>1.7,<2" "numpy<2"
+            <venv-dir>/bin/pip install <signalp-dir>
+
+A Python 3.10 interpreter is required. The pinned ranges are the ones the
+package supports, and installing them before the package keeps pip from
+resolving a major version that it cannot work with.
+
+Then add these variables to the scipion.conf file:
+    - SIGNALP_PYTHON_BIN = <venv-dir>/bin/python          (interpreter that can import the signalp package)
+    - SIGNALP_MODEL_DIR = <signalp-dir>/models            (directory containing sequential_models_signalp6/)
+
+The SignalP protocol reports the installation as missing instead of failing
+silently if either variable is unset.
+
+- LANL/CATNAP reference databases:
+These are not installed automatically and are not shipped with the plugin. Their
+terms of use do not clearly permit redistribution, and hiv.lanl.gov exposes no
+stable download URL for the antibody database, only an interactive search form,
+while explicitly discouraging automated traffic. They are therefore downloaded
+manually, once.
+
+Required, the antibody database. Open the LANL HIV Molecular Immunology Database
+at https://www.hiv.lanl.gov/content/immunology/, go to the antibody search
+section, run a search with no filters so that every record is returned, and
+export the result as CSV. Save it as 'ab_all.csv'.
+
+Optional, the neutralization panel. Open CATNAP at
+https://www.hiv.lanl.gov/components/sequence/HIV/neutralization/ and download the
+antibody summary table. It adds the mean panel IC50 and the number of viruses
+tested to each match. The protocol runs without it, reporting the potency columns
+as empty.
+
+Save both files under the scipion/software/em folder, in a dedicated
+lanl-catnap subfolder, which is where this plugin's packages are installed.
+Any other readable location also works, as the protocol resolves the files
+through the variables below rather than by searching for them. Then add these
+variables to the scipion.conf file:
+    - LANL_AB_ALL_PATH = <path/to/ab_all.csv>   (required, LANL antibody database export)
+    - CATNAP_ABS_PATH = <path/to/catnap_abs>    (optional, CATNAP neutralization panel)
+
+The LANL/CATNAP protocol reports the databases as missing, naming the variable
+that is unset or the path that does not exist, instead of failing silently.
 
 4. **Install**:
 
